@@ -69,7 +69,7 @@ class ProcurementClient:
         Args:
             page_size: 每頁顯示筆數 (10, 20, 50, 100)
             tender_type: 招標類型 (TENDER_DECLARATION: 招標公告, SEARCH_APPEAL: 公開徵求, PUBLIC_READ: 公開閱覽, PREDICT: 政府採購預告)
-            tender_way: 招標方式 (TENDER_WAY_ALL_DECLARATION: 各式招標公告, TENDER_WAY_1: 公開招標, 等)
+            tender_way: 招標方式 (TENDER_WAY_ALL_DECLARATION: 各式招標公告, TENDER_WAY_1: 公開招標, TENDER_WAY_12: 公開取得電子報價單, TENDER_WAY_2: 公開取得報價單或企劃書, TENDER_WAY_4: 經公開評選或公開徵求之限制性招標, TENDER_WAY_5: 選擇性招標(建立合格廠商名單), TENDER_WAY_7: 選擇性招標(建立合格廠商名單後續邀標), TENDER_WAY_3: 選擇性招標(個案), TENDER_WAY_10: 電子競價, TENDER_WAY_6: 限制性招標(未經公開評選或公開徵求))
             date_type: 日期類型 (isNow: 當日, isSpdt: 等標期內, isDate: 日期區間)
             start_date: 開始日期 (格式: YYYY/MM/DD)
             end_date: 結束日期 (格式: YYYY/MM/DD)
