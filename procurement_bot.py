@@ -6,7 +6,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent
+from linebot.models import MessageEvent, TextMessage, TextSendMessage
 from dotenv import load_dotenv
 import os
 import logging
@@ -83,33 +83,6 @@ def create_app():
         except InvalidSignatureError:
             abort(400)
         return 'OK'
-
-    @handler.add(FollowEvent)
-    def handle_follow(event):
-        """處理用戶加入好友事件"""
-        welcome_message = """
-👋 歡迎使用政府採購小助手！
-
-我可以幫您查詢最新的政府採購資訊，讓您掌握商機。
-
-💡 常用指令：
-• 採購/標案 - 查看最新標案資訊
-• 高額/大案 - 查看高金額標案
-• 搜尋 關鍵字 - 搜尋相關標案
-• 統計/數據 - 查看採購統計
-• 幫助 - 查看完整使用說明
-
-🎯 進階功能：
-• 進階搜尋 關鍵字 [參數] - 自訂搜尋條件
-• 工程/財物/勞務 - 分類查詢
-
-快來試試看吧！有任何問題都可以發送「幫助」查看詳細說明。
-        """.strip()
-        
-        line_bot_api.reply_message(
-            event.reply_token, 
-            TextSendMessage(text=welcome_message)
-        )
 
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event):
