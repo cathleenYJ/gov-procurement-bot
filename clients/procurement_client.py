@@ -43,6 +43,13 @@ class ProcurementClient:
             'cookiesession1': '678ADA5C58D1C83791ACA013619BCA78',
             'webpcc': '4bb3a3d8ab2edb41738dd541bfdf20a95d2399dd3a852e6c96fa3768646686b388649b39'
         })
+        
+        # 忽略 SSL 憑證驗證（處理政府網站憑證問題）
+        self.session.verify = False
+        
+        # 抑制 SSL 警告
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def search_tenders(self, 
                       page_size: int = 50,
