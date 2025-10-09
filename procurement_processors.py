@@ -84,7 +84,8 @@ class ProcurementProcessor:
             nature_map = {
                 "工程類": "RAD_PROCTRG_CATE_1",
                 "財物類": "RAD_PROCTRG_CATE_2", 
-                "勞務類": "RAD_PROCTRG_CATE_3"
+                "勞務類": "RAD_PROCTRG_CATE_3",
+                "不限": ""  # 不限等於空字串
             }
             
             procurement_nature = nature_map.get(category, "RAD_PROCTRG_CATE_1")

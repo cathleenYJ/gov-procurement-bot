@@ -117,6 +117,15 @@ def create_app():
                     tenders, "勞務類採購"
                 )
                 
+            elif user_message in ["不限", "全部", "所有"]:
+                # 不限分類（所有類型）
+                tenders = procurement_processor.get_procurements_by_category(
+                    "不限", limit=5
+                )
+                response_text = procurement_processor.format_multiple_tenders(
+                    tenders, "所有類型採購"
+                )
+                
             elif user_message in ["help", "幫助", "指令", "?"]:
                 # 幫助訊息
                 response_text = """
@@ -135,6 +144,7 @@ def create_app():
 • 工程 - 工程類採購案
 • 財物 - 財物類採購案  
 • 勞務 - 勞務類採購案
+• 不限 - 所有類型採購案
 
 💡 範例：
 • search 資訊系統

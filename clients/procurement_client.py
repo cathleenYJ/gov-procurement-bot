@@ -76,7 +76,7 @@ class ProcurementClient:
             org_name: 機關名稱
             tender_name: 標案名稱
             tender_id: 標案案號
-            procurement_nature: 採購性質 (RAD_PROCTRG_CATE_1: 工程類, RAD_PROCTRG_CATE_2: 財物類, RAD_PROCTRG_CATE_3: 勞務類)
+            procurement_nature: 採購性質 (RAD_PROCTRG_CATE_1: 工程類, RAD_PROCTRG_CATE_2: 財物類, RAD_PROCTRG_CATE_3: 勞務類, "": 不限)
             page: 頁數
         """
         
