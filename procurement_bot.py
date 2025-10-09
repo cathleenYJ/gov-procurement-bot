@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 import os
 import logging
 from procurement_processors import ProcurementProcessor
+from typing import Dict, Any
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +19,39 @@ logger = logging.getLogger(__name__)
 
 # 常量定義
 DEFAULT_KEYWORDS = ["資訊", "系統", "軟體", "硬體", "網路", "AI", "智慧"]
+
+def _parse_advanced_search(message: str) -> Dict[str, Any]:
+    """解析進階搜尋參數"""
+    # 移除指令前綴
+    content = message.replace("進階搜尋 ", "").replace("進階 ", "").strip()
+    
+    # 分割關鍵字和參數
+    parts = content.split()
+    keywords = []
+    params = {}
+    
+    for part in parts:
+        if '=' in part:
+            # 這是參數
+            key, value = part.split('=', 1)
+            params[key] = value
+        else:
+            # 這是關鍵字
+            keywords.append(part)
+    
+    # 設定預設值
+    search_params = {
+        'keywords': keywords if keywords else None,
+        'tender_type': params.get('type', 'TENDER_DECLARATION'),
+        'tender_way': params.get('way', 'TENDER_WAY_ALL_DECLARATION'),
+        'date_type': params.get('date', 'isDate'),
+        'start_date': params.get('start'),
+        'end_date': params.get('end'),
+        'procurement_nature': params.get('nature', ''),
+        'limit': 10
+    }
+    
+    return search_params
 
 def create_app():
     """創建並配置 Flask 應用"""
@@ -90,6 +124,38 @@ def create_app():
                 else:
                     response_text = "請提供搜尋關鍵字，例如：search 資訊系統"
                     
+            elif user_message.startswith("進階搜尋 ") or user_message.startswith("進階 "):
+                # 進階搜尋 - 解析參數
+                try:
+                    # 解析進階搜尋參數
+                    search_params = _parse_advanced_search(user_message)
+                    
+                    tenders = procurement_processor.advanced_search_procurements(**search_params)
+                    
+                    if tenders:
+                        # 建立搜尋條件描述
+                        conditions = []
+                        if search_params.get('keywords'):
+                            conditions.append(f"關鍵字: {' '.join(search_params['keywords'])}")
+                        if search_params.get('tender_type') != "TENDER_DECLARATION":
+                            conditions.append(f"類型: {search_params['tender_type']}")
+                        if search_params.get('tender_way') != "TENDER_WAY_ALL_DECLARATION":
+                            conditions.append(f"方式: {search_params['tender_way']}")
+                        if search_params.get('procurement_nature'):
+                            conditions.append(f"性質: {search_params['procurement_nature']}")
+                        
+                        title = "進階搜尋結果"
+                        if conditions:
+                            title += f" ({', '.join(conditions)})"
+                        
+                        response_text = procurement_processor.format_multiple_tenders(tenders, title)
+                    else:
+                        response_text = "沒有找到符合條件的採購資訊。"
+                        
+                except Exception as e:
+                    logger.error(f"Error in advanced search: {e}")
+                    response_text = "進階搜尋格式錯誤，請參考說明：\n進階搜尋 關鍵字 type=TENDER_DECLARATION way=TENDER_WAY_1 date=isDate start=2025/01/01 end=2025/12/31 nature=RAD_PROCTRG_CATE_1"
+                    
             elif user_message in ["工程", "工程類"]:
                 # 工程類採購
                 tenders = procurement_processor.get_procurements_by_category(
@@ -139,6 +205,7 @@ def create_app():
 🔍 搜尋指令：
 • search 關鍵字 - 搜尋相關採購案
 • 搜尋 關鍵字 - 搜尋相關採購案
+• 進階搜尋 關鍵字 type=TENDER_DECLARATION way=TENDER_WAY_1 date=isDate start=2025/01/01 end=2025/12/31 nature=RAD_PROCTRG_CATE_1
 
 📂 分類查詢：
 • 工程 - 工程類採購案
@@ -149,6 +216,7 @@ def create_app():
 💡 範例：
 • search 資訊系統
 • 搜尋 AI人工智慧
+• 進階搜尋 口罩 type=TENDER_DECLARATION date=isDate start=2025/10/01 end=2025/10/31
                 """.strip()
                 
             else:

@@ -59,6 +59,47 @@ class ProcurementProcessor:
             logger.error(f"Error searching procurements: {e}")
             return []
 
+    def advanced_search_procurements(self, 
+                                   keywords: List[str] = None,
+                                   tender_type: str = "TENDER_DECLARATION",
+                                   tender_way: str = "TENDER_WAY_ALL_DECLARATION", 
+                                   date_type: str = "isDate",
+                                   start_date: str = None,
+                                   end_date: str = None,
+                                   procurement_nature: str = "",
+                                   limit: int = 10) -> List[Dict[str, Any]]:
+        """進階搜尋政府採購 - 允許指定所有搜尋參數"""
+        try:
+            # 如果沒有指定日期範圍，使用最近一個月
+            if not start_date and not end_date:
+                from datetime import datetime, timedelta
+                end_date_obj = datetime.now()
+                start_date_obj = end_date_obj - timedelta(days=30)
+                start_date = start_date_obj.strftime("%Y/%m/%d")
+                end_date = end_date_obj.strftime("%Y/%m/%d")
+            
+            result = self.client.search_tenders(
+                tender_name=" ".join(keywords) if keywords else "",
+                tender_type=tender_type,
+                tender_way=tender_way,
+                date_type=date_type,
+                start_date=start_date,
+                end_date=end_date,
+                procurement_nature=procurement_nature,
+                page_size=min(limit*2, 100)
+            )
+            
+            if result.get('success'):
+                tenders = result.get('data', [])
+                filtered_tenders = self._filter_and_rank_tenders(tenders, keywords)
+                return filtered_tenders[:limit]
+            else:
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error in advanced search: {e}")
+            return []
+
     def get_high_value_procurements(self, min_amount: int = 50000000, limit: int = 10) -> List[Dict[str, Any]]:
         """獲取高金額政府採購"""
         try:
