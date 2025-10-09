@@ -53,30 +53,30 @@ class ProcurementClient:
 
     def search_tenders(self, 
                       page_size: int = 50,
-                      tender_type: str = "TENDER_DECLARATION",
-                      tender_way: str = "TENDER_WAY_ALL_DECLARATION",
+                      tender_type: Optional[str] = None,
+                      tender_way: Optional[str] = None,
                       date_type: str = "isNow",
                       start_date: Optional[str] = None,
                       end_date: Optional[str] = None,
                       org_name: str = "",
                       tender_name: str = "",
                       tender_id: str = "",
-                      procurement_nature: str = "RAD_PROCTRG_CATE_1",
+                      procurement_nature: str = "",
                       page: int = 1) -> Dict[str, Any]:
         """
         搜尋政府採購標案
         
         Args:
             page_size: 每頁顯示筆數 (10, 20, 50, 100)
-            tender_type: 招標類型 (TENDER_DECLARATION: 招標公告, SEARCH_APPEAL: 公開徵求, PUBLIC_READ: 公開閱覽, PREDICT: 政府採購預告)
-            tender_way: 招標方式 (TENDER_WAY_ALL_DECLARATION: 各式招標公告, TENDER_WAY_1: 公開招標, TENDER_WAY_12: 公開取得電子報價單, TENDER_WAY_2: 公開取得報價單或企劃書, TENDER_WAY_4: 經公開評選或公開徵求之限制性招標, TENDER_WAY_5: 選擇性招標(建立合格廠商名單), TENDER_WAY_7: 選擇性招標(建立合格廠商名單後續邀標), TENDER_WAY_3: 選擇性招標(個案), TENDER_WAY_10: 電子競價, TENDER_WAY_6: 限制性招標(未經公開評選或公開徵求))
+            tender_type: 招標類型 (TENDER_DECLARATION: 招標公告, SEARCH_APPEAL: 公開徵求, PUBLIC_READ: 公開閱覽, PREDICT: 政府採購預告)，預設不指定
+            tender_way: 招標方式 (TENDER_WAY_ALL_DECLARATION: 各式招標公告, TENDER_WAY_1: 公開招標, TENDER_WAY_12: 公開取得電子報價單, TENDER_WAY_2: 公開取得報價單或企劃書, TENDER_WAY_4: 經公開評選或公開徵求之限制性招標, TENDER_WAY_5: 選擇性招標(建立合格廠商名單), TENDER_WAY_7: 選擇性招標(建立合格廠商名單後續邀標), TENDER_WAY_3: 選擇性招標(個案), TENDER_WAY_10: 電子競價, TENDER_WAY_6: 限制性招標(未經公開評選或公開徵求))，預設不指定
             date_type: 日期類型 (isNow: 當日, isSpdt: 等標期內, isDate: 日期區間)
             start_date: 開始日期 (格式: YYYY/MM/DD)
             end_date: 結束日期 (格式: YYYY/MM/DD)
             org_name: 機關名稱
             tender_name: 標案名稱
             tender_id: 標案案號
-            procurement_nature: 採購性質 (RAD_PROCTRG_CATE_1: 工程類, RAD_PROCTRG_CATE_2: 財物類, RAD_PROCTRG_CATE_3: 勞務類, "": 不限)
+            procurement_nature: 採購性質 (RAD_PROCTRG_CATE_1: 工程類, RAD_PROCTRG_CATE_2: 財物類, RAD_PROCTRG_CATE_3: 勞務類, "": 不限)，預設不限
             page: 頁數
         """
         
@@ -102,13 +102,17 @@ class ProcurementClient:
             'orgId': '',
             'tenderName': tender_name,
             'tenderId': tender_id,
-            'tenderType': tender_type,
-            'tenderWay': tender_way,
             'dateType': date_type,
             'radProctrgCate': procurement_nature,
             'policyAdvocacy': '',
             'd-49738-p': page
         }
+        
+        # 只有在指定時才加入 tenderType 和 tenderWay 參數
+        if tender_type is not None:
+            params['tenderType'] = tender_type
+        if tender_way is not None:
+            params['tenderWay'] = tender_way
         
         # 添加日期參數
         if start_date:

@@ -61,8 +61,8 @@ class ProcurementProcessor:
 
     def advanced_search_procurements(self, 
                                    keywords: List[str] = None,
-                                   tender_type: str = "TENDER_DECLARATION",
-                                   tender_way: str = "TENDER_WAY_ALL_DECLARATION", 
+                                   tender_type: Optional[str] = None,
+                                   tender_way: Optional[str] = None, 
                                    date_type: str = "isDate",
                                    start_date: str = None,
                                    end_date: str = None,

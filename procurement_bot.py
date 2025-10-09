@@ -6,7 +6,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent
 from dotenv import load_dotenv
 import os
 import logging
@@ -42,8 +42,8 @@ def _parse_advanced_search(message: str) -> Dict[str, Any]:
     # 設定預設值
     search_params = {
         'keywords': keywords if keywords else None,
-        'tender_type': params.get('type', 'TENDER_DECLARATION'),
-        'tender_way': params.get('way', 'TENDER_WAY_ALL_DECLARATION'),
+        'tender_type': params.get('type'),
+        'tender_way': params.get('way'),
         'date_type': params.get('date', 'isDate'),
         'start_date': params.get('start'),
         'end_date': params.get('end'),
@@ -83,6 +83,33 @@ def create_app():
         except InvalidSignatureError:
             abort(400)
         return 'OK'
+
+    @handler.add(FollowEvent)
+    def handle_follow(event):
+        """處理用戶加入好友事件"""
+        welcome_message = """
+👋 歡迎使用政府採購小助手！
+
+我可以幫您查詢最新的政府採購資訊，讓您掌握商機。
+
+💡 常用指令：
+• 採購/標案 - 查看最新標案資訊
+• 高額/大案 - 查看高金額標案
+• 搜尋 關鍵字 - 搜尋相關標案
+• 統計/數據 - 查看採購統計
+• 幫助 - 查看完整使用說明
+
+🎯 進階功能：
+• 進階搜尋 關鍵字 [參數] - 自訂搜尋條件
+• 工程/財物/勞務 - 分類查詢
+
+快來試試看吧！有任何問題都可以發送「幫助」查看詳細說明。
+        """.strip()
+        
+        line_bot_api.reply_message(
+            event.reply_token, 
+            TextSendMessage(text=welcome_message)
+        )
 
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event):
@@ -137,9 +164,9 @@ def create_app():
                         conditions = []
                         if search_params.get('keywords'):
                             conditions.append(f"關鍵字: {' '.join(search_params['keywords'])}")
-                        if search_params.get('tender_type') != "TENDER_DECLARATION":
+                        if search_params.get('tender_type'):
                             conditions.append(f"類型: {search_params['tender_type']}")
-                        if search_params.get('tender_way') != "TENDER_WAY_ALL_DECLARATION":
+                        if search_params.get('tender_way'):
                             conditions.append(f"方式: {search_params['tender_way']}")
                         if search_params.get('procurement_nature'):
                             conditions.append(f"性質: {search_params['procurement_nature']}")
@@ -205,7 +232,14 @@ def create_app():
 🔍 搜尋指令：
 • search 關鍵字 - 搜尋相關採購案
 • 搜尋 關鍵字 - 搜尋相關採購案
-• 進階搜尋 關鍵字 type=TENDER_DECLARATION way=TENDER_WAY_1 date=isDate start=2025/01/01 end=2025/12/31 nature=RAD_PROCTRG_CATE_1
+• 進階搜尋 關鍵字 [type=招標類型] [way=招標方式] [date=日期類型] [start=開始日期] [end=結束日期] [nature=採購性質]
+
+參數說明：
+• type: 招標類型 (TENDER_DECLARATION, SEARCH_APPEAL, PUBLIC_READ, PREDICT) - 預設不指定
+• way: 招標方式 (TENDER_WAY_1, TENDER_WAY_2, TENDER_WAY_3, ...) - 預設不指定  
+• date: 日期類型 (isNow, isSpdt, isDate) - 預設 isDate
+• start/end: 日期範圍 (YYYY/MM/DD格式)
+• nature: 採購性質 (RAD_PROCTRG_CATE_1, RAD_PROCTRG_CATE_2, RAD_PROCTRG_CATE_3 或空白) - 預設不限
 
 📂 分類查詢：
 • 工程 - 工程類採購案
@@ -216,7 +250,8 @@ def create_app():
 💡 範例：
 • search 資訊系統
 • 搜尋 AI人工智慧
-• 進階搜尋 口罩 type=TENDER_DECLARATION date=isDate start=2025/10/01 end=2025/10/31
+• 進階搜尋 口罩 date=isDate start=2025/10/01 end=2025/10/31
+• 進階搜尋 工程 type=TENDER_DECLARATION way=TENDER_WAY_1 nature=RAD_PROCTRG_CATE_1
                 """.strip()
                 
             else:
