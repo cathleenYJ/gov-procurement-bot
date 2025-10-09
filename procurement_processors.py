@@ -283,6 +283,10 @@ class ProcurementProcessor:
                 if len(org_name) > 15:
                     tender_info += "..."
             
+            # 添加連結
+            if tender.get('tender_url'):
+                tender_info += f"\n🔗 {tender['tender_url']}"
+            
             result.append(tender_info)
         
         return "\n".join(result)
