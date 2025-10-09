@@ -10,8 +10,8 @@ from procurement_bot import create_app
 app = create_app()
 
 if __name__ == "__main__":
-    # 生產環境設定
+    # 生產環境設定 - Render 會自動設定 PORT
     port = int(os.environ.get("PORT", 5000))
-    debug = os.environ.get("DEBUG", "false").lower() == "true"
+    debug = False  # 生產環境一律關閉 debug
 
     app.run(host="0.0.0.0", port=port, debug=debug)
