@@ -3,7 +3,7 @@
 負責處理Line Bot與政府採購資料的互動
 """
 
-from flask import Flask, request, abort
+from flask import Flask, request, abort, jsonify
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -89,6 +89,7 @@ def create_app():
     # Line Bot 配置
     CHANNEL_ACCESS_TOKEN = os.getenv('CHANNEL_ACCESS_TOKEN')
     CHANNEL_SECRET = os.getenv('CHANNEL_SECRET')
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')  # 管理員密碼
 
     if not CHANNEL_ACCESS_TOKEN or not CHANNEL_SECRET:
         logger.error("Missing Line Bot credentials. Please set CHANNEL_ACCESS_TOKEN and CHANNEL_SECRET in .env file")
@@ -450,6 +451,87 @@ def create_app():
                 "status": "error",
                 "message": f"測試失敗: {str(e)}"
             }
+
+    @app.route("/admin/users")
+    def admin_users():
+        """管理端點：查看所有使用者資料（需要密碼）"""
+        # 簡單的密碼認證
+        auth_password = request.args.get('password', '')
+        
+        if auth_password != ADMIN_PASSWORD:
+            return jsonify({
+                "status": "error",
+                "message": "未授權訪問。請使用正確的密碼參數。",
+                "usage": "請訪問: /admin/users?password=YOUR_PASSWORD"
+            }), 401
+        
+        try:
+            conn = sqlite3.connect('users.db')
+            conn.row_factory = sqlite3.Row  # 讓結果可以用欄位名稱訪問
+            c = conn.cursor()
+            c.execute('''SELECT line_user_id, company, contact_name, email, 
+                         created_at, updated_at FROM users 
+                         ORDER BY created_at DESC''')
+            rows = c.fetchall()
+            conn.close()
+            
+            # 轉換為字典列表
+            users = []
+            for row in rows:
+                users.append({
+                    'line_user_id': row['line_user_id'],
+                    'company': row['company'],
+                    'contact_name': row['contact_name'],
+                    'email': row['email'],
+                    'created_at': row['created_at'],
+                    'updated_at': row['updated_at']
+                })
+            
+            return jsonify({
+                "status": "success",
+                "total_users": len(users),
+                "users": users
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching users: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"獲取資料失敗: {str(e)}"
+            }), 500
+
+    @app.route("/admin/user/<user_id>")
+    def admin_user_detail(user_id):
+        """管理端點：查看特定使用者資料（需要密碼）"""
+        auth_password = request.args.get('password', '')
+        
+        if auth_password != ADMIN_PASSWORD:
+            return jsonify({
+                "status": "error",
+                "message": "未授權訪問"
+            }), 401
+        
+        try:
+            user_data = get_user(user_id)
+            
+            if user_data:
+                return jsonify({
+                    "status": "success",
+                    "user_id": user_id,
+                    "data": user_data
+                })
+            else:
+                return jsonify({
+                    "status": "not_found",
+                    "message": "找不到此使用者"
+                }), 404
+                
+        except Exception as e:
+            logger.error(f"Error fetching user detail: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"獲取資料失敗: {str(e)}"
+            }), 500
 
     return app
 
