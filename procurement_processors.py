@@ -118,8 +118,8 @@ class ProcurementProcessor:
             logger.error(f"Error getting high value procurements: {e}")
             return []
 
-    def get_procurements_by_category(self, category: str = "工程類", limit: int = 10) -> List[Dict[str, Any]]:
-        """根據採購性質獲取標案"""
+    def get_procurements_by_category(self, category: str = "工程類", limit: int = 10, max_days_back: int = 30) -> List[Dict[str, Any]]:
+        """根據採購性質獲取標案，如果當日沒有資料則往前查詢"""
         try:
             # 映射採購性質
             nature_map = {
@@ -131,17 +131,42 @@ class ProcurementProcessor:
             
             procurement_nature = nature_map.get(category, "RAD_PROCTRG_CATE_1")
             
-            result = self.client.search_tenders(
-                procurement_nature=procurement_nature,
-                page_size=min(limit*2, 100)
-            )
+            # 從今天開始往前查詢，直到找到資料為止
+            today = datetime.now()
+            days_searched = 0
             
-            if result.get('success'):
-                tenders = result.get('data', [])
-                filtered_tenders = self._filter_and_rank_tenders(tenders)
-                return filtered_tenders[:limit]
-            else:
-                return []
+            while days_searched < max_days_back:
+                target_date = today - timedelta(days=days_searched)
+                date_str = target_date.strftime("%Y/%m/%d")
+                
+                logger.info(f"Searching {category} for date: {date_str}")
+                
+                result = self.client.search_tenders(
+                    procurement_nature=procurement_nature,
+                    date_type="isDate",
+                    start_date=date_str,
+                    end_date=date_str,
+                    page_size=min(limit*2, 100)
+                )
+                
+                if result.get('success'):
+                    tenders = result.get('data', [])
+                    if tenders:  # 如果找到資料
+                        filtered_tenders = self._filter_and_rank_tenders(tenders)
+                        if filtered_tenders:
+                            logger.info(f"Found {len(filtered_tenders)} tenders for {category} on {date_str}")
+                            # 在第一筆資料中加入查詢日期資訊
+                            result_tenders = filtered_tenders[:limit]
+                            if result_tenders and days_searched > 0:
+                                result_tenders[0]['_search_date'] = date_str
+                            return result_tenders
+                
+                # 沒找到資料，往前一天
+                days_searched += 1
+            
+            # 超過最大搜尋天數仍未找到
+            logger.warning(f"No {category} tenders found in the last {max_days_back} days")
+            return []
                 
         except Exception as e:
             logger.error(f"Error getting procurements by category: {e}")
@@ -258,7 +283,12 @@ class ProcurementProcessor:
         if not tenders:
             return "目前沒有找到相關的政府採購資訊。"
         
-        result = [f"📊 {title} (共{len(tenders)}筆)\n"]
+        # 檢查是否有搜尋日期資訊（非當日資料）
+        search_date_info = ""
+        if tenders and tenders[0].get('_search_date'):
+            search_date_info = f"\n📅 查詢日期：{tenders[0]['_search_date']} (當日無資料，已自動往前查詢)"
+        
+        result = [f"📊 {title} (共{len(tenders)}筆){search_date_info}\n"]
         
         for i, tender in enumerate(tenders, 1):
             tender_info = f"{i}. {tender.get('tender_name', 'N/A')[:30]}"

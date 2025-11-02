@@ -14,14 +14,10 @@ from dotenv import load_dotenv
 import os
 import logging
 from procurement_processors import ProcurementProcessor
-from typing import Dict, Any
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# 常量定義
-DEFAULT_KEYWORDS = ["資訊", "系統", "軟體", "硬體", "網路", "AI", "智慧"]
 
 def create_app():
     """創建並配置 Flask 應用"""
@@ -60,8 +56,8 @@ def create_app():
         user_message_lower = user_message.lower()
         
         try:
-            # 處理圖文選單按鈕發送的完整訊息（使用 Quick Reply）
-            if "好的！請問您想查詢的是哪一類標案？" in user_message or "請直接輸入以下關鍵字：" in user_message:
+            # 處理圖文選單按鈕「招標查詢」（使用 Quick Reply）
+            if user_message == "招標查詢":
                 # 建立 Quick Reply 按鈕
                 quick_reply = QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),

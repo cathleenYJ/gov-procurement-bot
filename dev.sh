@@ -77,7 +77,7 @@ case "$1" in
         check_venv
         activate_venv
         print_info "啟動本地開發服務器..."
-        python linebot_app.py
+        python procurement_bot.py
         ;;
 
     "test")
