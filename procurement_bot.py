@@ -8,7 +8,8 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
-    QuickReply, QuickReplyButton, MessageAction
+    QuickReply, QuickReplyButton, MessageAction,
+    FollowEvent
 )
 from dotenv import load_dotenv
 import os
@@ -108,6 +109,66 @@ def create_app():
         except InvalidSignatureError:
             abort(400)
         return 'OK'
+
+    @handler.add(FollowEvent)
+    def handle_follow(event):
+        """處理使用者加入好友事件"""
+        user_id = event.source.user_id
+        
+        try:
+            # 檢查使用者是否已登錄
+            user_data = get_user(user_id)
+            
+            if user_data:
+                # 已登錄過的使用者（重新加入）
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="📋 招標查詢", text="招標查詢")),
+                    QuickReplyButton(action=MessageAction(label="👤 我的資料", text="我的資料")),
+                    QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
+                ])
+                
+                welcome_message = f"""歡迎回來，{user_data['contact_name']}！
+
+🏢 {user_data['company']}
+
+很高興再次為您服務！
+您可以直接開始查詢政府採購標案。
+
+點擊下方按鈕快速開始 👇"""
+            else:
+                # 新使用者
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="✍️ 開始登錄", text="開始登錄")),
+                    QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
+                ])
+                
+                welcome_message = """👋 歡迎使用政府採購機器人！
+
+🤖 我可以幫您：
+• 即時查詢政府採購標案
+• 按類別篩選（工程/財物/勞務）
+• 快速瀏覽標案資訊
+
+📝 開始使用前，請先登錄您的公司資料：
+• 公司名稱
+• 聯絡人姓名
+• Email
+
+✨ 點擊「開始登錄」即可開始！"""
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=welcome_message, quick_reply=quick_reply)
+            )
+            
+            logger.info(f"New user followed: {user_id}")
+            
+        except Exception as e:
+            logger.error(f"Error handling follow event: {e}")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="歡迎使用政府採購機器人！輸入任何訊息開始使用。")
+            )
 
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event):
