@@ -136,10 +136,9 @@ def create_app():
 
 點擊下方按鈕快速開始 👇"""
             else:
-                # 新使用者
+                # 新使用者 - 只顯示開始登錄按鈕
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="✍️ 開始登錄", text="開始登錄")),
-                    QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
+                    QuickReplyButton(action=MessageAction(label="✍️ 開始登錄", text="開始登錄"))
                 ])
                 
                 welcome_message = """👋 歡迎使用政府採購機器人！
@@ -154,7 +153,7 @@ def create_app():
 • 聯絡人姓名
 • Email
 
-✨ 點擊「開始登錄」即可開始！"""
+✨ 點擊下方「開始登錄」即可開始！"""
             
             line_bot_api.reply_message(
                 event.reply_token,
