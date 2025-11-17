@@ -94,7 +94,7 @@ def create_app():
             if user_data:
                 # 已登錄過的使用者（重新加入）
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="📋 招標查詢", text="招標查詢")),
+                    QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
                     QuickReplyButton(action=MessageAction(label="👤 我的資料", text="我的資料")),
                     QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
                 ])
@@ -175,7 +175,7 @@ def create_app():
 📧 Email：{data['email']}
 
 現在您可以開始查詢政府採購資訊了！
-輸入「招標查詢」或點擊圖文選單按鈕開始。"""
+輸入「標案查詢」或點擊圖文選單按鈕開始。"""
                     else:
                         response_text = "❌ 登錄失敗，請稍後再試。"
                     
@@ -221,13 +221,13 @@ def create_app():
                 )
                 return
                 
-            elif user_message_lower in ["我的資料", "查看資料", "個人資料"] or user_message == "個人資料":
+            elif user_message_lower in ["我的資料", "查看資料", "建立個人資料"] or user_message == "建立個人資料":
                 user_data = get_user(supabase_client, user_id)
                 if user_data:
                     # 已有資料，顯示並詢問是否修改
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="✏️ 修改資料", text="修改資料")),
-                        QuickReplyButton(action=MessageAction(label="✅ 不修改", text="招標查詢"))
+                        QuickReplyButton(action=MessageAction(label="✅ 不修改", text="標案查詢"))
                     ])
                     
                     response_text = f"""您的登錄資料：
@@ -253,8 +253,8 @@ def create_app():
                 return
             
             # === 處理標案查詢 ===
-            # 處理圖文選單按鈕「招標查詢」（使用 Quick Reply）
-            if user_message == "招標查詢":
+            # 處理圖文選單按鈕「標案查詢」（使用 Quick Reply）
+            if user_message == "標案查詢":
                 # 建立 Quick Reply 按鈕
                 quick_reply = QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
@@ -337,7 +337,7 @@ def create_app():
                 if user_data:
                     # 已登錄使用者的歡迎訊息
                     quick_reply = QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="📋 招標查詢", text="招標查詢")),
+                        QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
                         QuickReplyButton(action=MessageAction(label="👤 我的資料", text="我的資料")),
                         QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
                     ])
