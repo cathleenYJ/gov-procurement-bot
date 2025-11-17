@@ -280,6 +280,180 @@ def create_app():
                 )
                 return
                 
+            # === 處理「更多標案」請求 ===
+            elif user_message.startswith("更多") and any(x in user_message for x in ["工程", "財物", "勞務", "工程類", "財物類", "勞務類"]):
+                # 解析類別
+                if "工程" in user_message:
+                    category = "工程類"
+                elif "財物" in user_message:
+                    category = "財物類"
+                elif "勞務" in user_message:
+                    category = "勞務類"
+                else:
+                    category = None
+                
+                logger.info(f"=== 更多標案請求 === User: {user_id}, Category: {category}")
+                
+                # 為避免跨進程快取不一致，優先從資料庫取得最新的快取狀態（然後更新記憶體）
+                # 這樣不同進程或多台機器能共享同一個 browsing state
+                db_state = None if BYPASS_DB_BROWSING else analytics.get_browsing_state(user_id)
+                cache = user_tender_cache.get(user_id, {})
+
+                if db_state and db_state.get("category") == category:
+                    cache = {
+                        "category": db_state["category"],
+                        "seen_ids": db_state.get("seen_tender_ids", []),
+                        "page": db_state.get("page", 1)
+                    }
+                    user_tender_cache[user_id] = cache
+                    logger.info(f"Loaded browsing state from DB for {user_id}, seen={len(cache['seen_ids'])}, page={cache['page']}")
+                else:
+                    # fallback to memory cache if DB not available
+                    cache = user_tender_cache.get(user_id, {})
+                logger.info(f"Memory cache: {cache.get('category') if cache else None}, seen_ids: {len(cache.get('seen_ids', []))}")
+                
+                # 如果記憶體快取不存在或類別不匹配，從資料庫讀取
+                if not cache or cache.get("category") != category:
+                    logger.info(f"Memory cache not found for {user_id}, loading from database...")
+                    db_state = None if BYPASS_DB_BROWSING else analytics.get_browsing_state(user_id)
+                    if db_state and db_state.get("category") == category:
+                        cache = {
+                            "category": db_state["category"],
+                            "seen_ids": db_state.get("seen_tender_ids", []),
+                            "page": db_state.get("page", 1)
+                        }
+                        user_tender_cache[user_id] = cache
+                        logger.info(f"Loaded {len(cache['seen_ids'])} seen IDs from database")
+                    else:
+                        logger.warning(f"No cache found in database either. DB state: {db_state}")
+                
+                if category and cache.get("category") == category:
+                    # 取得已看過的ID
+                    seen_ids = cache.get("seen_ids", [])
+                    logger.info(f"More request: user={user_id}, category={category}, cached_seen={len(seen_ids)}, cache_page={cache.get('page')}")
+                    # 當開發或測試想要完全跳過本地記憶體快取時，可設置環境變數 DISABLE_MEMORY_CACHE=True
+                    # 若設定為 True，將會忽略記憶體快取的 seen_ids（只會採用分頁 page），以確保每次查詢都是新的頁面
+                    if DISABLE_MEMORY_CACHE:
+                        logger.info("DISABLE_MEMORY_CACHE is enabled - ignoring memory cache seen_ids and only using page")
+                        cache = {"category": category, "seen_ids": [], "page": cache.get('page', 1)}
+                        user_tender_cache[user_id] = cache
+
+                    # 頁碼：記錄到快取，可透過更多按鈕翻頁
+                    current_page = cache.get("page", 1)
+                    next_page = current_page + 1
+                    
+                    logger.info(f"Requesting more {category} tenders, excluding {len(seen_ids)} seen IDs")
+                    logger.info(f"First 3 excluded IDs: {seen_ids[:3] if seen_ids else 'None'}")
+                    
+                    # 取得更多標案，直接排除已看過的ID（只要10筆新的）
+                    # 先嘗試使用頁碼 (page) 來取得不重複內容
+                    MAX_RETRIES = 3
+                    attempt = 0
+                    new_tenders = []
+                    candidate_page = next_page
+                    while attempt < MAX_RETRIES and not new_tenders:
+                        logger.info(f"Attempt {attempt+1} fetching page {candidate_page} for {category}")
+                        candidate = procurement_processor.get_procurements_by_category(
+                            category, limit=10, exclude_ids=seen_ids, page=candidate_page
+                        )
+
+                        # 手動過濾以防止因 site 行為或 id 格式差異造成的重複
+                        filtered_candidate = []
+                        for t in candidate:
+                            t_id = t.get('tender_id', '') or t.get('tender_name', '')
+                            t_key = f"{t.get('tender_name','')}|{t.get('org_name','')}"
+                            if t_id in seen_ids or t_key in seen_ids:
+                                continue
+                            filtered_candidate.append(t)
+
+                        if filtered_candidate:
+                            new_tenders = filtered_candidate[:10]
+                            logger.info(f"Found {len(new_tenders)} filtered tenders from page {candidate_page}")
+                            break
+
+                        # 下一次嘗試下一頁
+                        attempt += 1
+                        candidate_page += 1
+
+                    if not new_tenders:
+                        new_tenders = procurement_processor.get_procurements_by_category(
+                            category, limit=10, exclude_ids=seen_ids
+                        )
+
+                    logger.info(f"Received {len(new_tenders)} new tenders (user={user_id}, category={category}, page={next_page})")
+                    if new_tenders:
+                        new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
+                        logger.info(f"First 3 new IDs: {new_ids[:3]}")
+                        
+                        # 檢查重複（debug用）
+                        overlap = set(seen_ids) & set(new_ids)
+                        if len(overlap) > 0:
+                            logger.error(f"❌ Found {len(overlap)} duplicate IDs: {list(overlap)[:3]}")
+                        else:
+                            logger.info("✅ No duplicates found")
+
+                    if new_tenders:
+                        # 記錄「更多標案」查詢行為
+                        analytics.log_query(
+                            line_user_id=user_id,
+                            query_type="更多標案",
+                            query_text=user_message,
+                            category=category,
+                            result_count=len(new_tenders)
+                        )
+                        
+                        # 記錄新標案瀏覽
+                        analytics.log_tender_views_batch(user_id, new_tenders)
+                        
+                        # 更新已看過的ID
+                        new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
+                        cache["seen_ids"].extend(new_ids)
+                        # 把 page 更新為我們最後實際使用的 candidate_page - 如果沒有修改，使用 next_page
+                        cache["page"] = candidate_page if 'candidate_page' in locals() else next_page
+                        user_tender_cache[user_id] = cache
+                        
+                        # 同時更新資料庫的瀏覽狀態
+                        ok = analytics.update_browsing_state(user_id, category, cache["seen_ids"], page=cache.get("page", 1))
+                        logger.info(f"update_browsing_state returned: {ok} for user={user_id}")
+                        if not ok:
+                            logger.warning(f"Failed to persist browsing state for {user_id} - cache will be held in memory only")
+                        
+                        # 顯示新標案，並繼續提供「更多」按鈕
+                        quick_reply = QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label=f"📋 更多{category}標案", text=f"更多{category}")),
+                            QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                        ])
+                        
+                        response_text = procurement_processor.format_multiple_tenders(
+                            new_tenders, f"{category}採購（續）"
+                        )
+                        
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=response_text, quick_reply=quick_reply)
+                        )
+                    else:
+                        # 沒有更多新標案了
+                        quick_reply = QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label="🔄 重新查詢", text=category)),
+                            QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                        ])
+                        
+                        response_text = f"目前沒有更多{category}標案了。\n\n您可以：\n• 重新查詢以更新資料\n• 查看其他分類的標案"
+                        
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=response_text, quick_reply=quick_reply)
+                        )
+                else:
+                    # 沒有快取，重新查詢
+                    response_text = f"請先查詢{category}標案"
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=response_text)
+                    )
+                return
+
             elif "工程類" in user_message or user_message_lower in ["工程", "1", "1."]:
                 # 工程類採購
                 category = "工程類"
