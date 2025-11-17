@@ -119,7 +119,8 @@ class ProcurementProcessor:
             return []
 
     def get_procurements_by_category(self, category: str = "工程類", limit: int = 10, 
-                                    max_days_back: int = 30, exclude_ids: List[str] = None) -> List[Dict[str, Any]]:
+                                    max_days_back: int = 30, exclude_ids: List[str] = None,
+                                    page: int = 1) -> List[Dict[str, Any]]:
         """根據採購性質獲取標案，如果當日沒有資料則往前查詢
         
         當 limit > 10 時，會跨多天查詢以取得更多標案
@@ -143,8 +144,8 @@ class ProcurementProcessor:
             exclude_ids = exclude_ids or []
             
             # 如果需要大量資料（limit > 10），跨多天查詢
-            if limit > 10 or exclude_ids:
-                return self._get_procurements_multi_day(procurement_nature, category, limit, max_days_back, exclude_ids)
+            if limit > 10 or exclude_ids or page > 1:
+                return self._get_procurements_multi_day(procurement_nature, category, limit, max_days_back, exclude_ids, page)
             
             # 一般查詢：從今天開始往前查詢，直到找到資料為止
             today = datetime.now()
@@ -161,7 +162,8 @@ class ProcurementProcessor:
                     date_type="isDate",
                     start_date=date_str,
                     end_date=date_str,
-                    page_size=min(limit*2, 100)
+                    page_size=min(limit*2, 100),
+                    page=page
                 )
                 
                 if result.get('success'):
@@ -190,7 +192,7 @@ class ProcurementProcessor:
             return []
     
     def _get_procurements_multi_day(self, procurement_nature: str, category: str, 
-                                   limit: int, max_days_back: int, exclude_ids: List[str] = None) -> List[Dict[str, Any]]:
+                                   limit: int, max_days_back: int, exclude_ids: List[str] = None, page: int = 1) -> List[Dict[str, Any]]:
         """跨多天查詢標案（用於「更多標案」功能）
         
         策略：優先把當天的資料抓完，再往前查詢其他天
@@ -205,11 +207,12 @@ class ProcurementProcessor:
         all_tenders = []
         today = datetime.now()
         days_searched = 0
-        exclude_ids = set(exclude_ids or [])
+        # 用於排除的ID集合（包含大小寫歸一化）
+        exclude_ids = set(x for x in (exclude_ids or []))
         
         logger.info(f"Multi-day search for {category}, need {limit} tenders, excluding {len(exclude_ids)} IDs")
         
-        # 持續往前查詢直到收集足夠的標案
+    # 持續往前查詢直到收集足夠的標案
         while len(all_tenders) < limit and days_searched < max_days_back:
             target_date = today - timedelta(days=days_searched)
             date_str = target_date.strftime("%Y/%m/%d")
@@ -218,14 +221,17 @@ class ProcurementProcessor:
             
             try:
                 # 第一天（當天）抓取更多資料，確保能涵蓋所有當天標案
+                # 從快取或參數傳入的 page 參數，如果是跨天則回到第一頁
                 page_size = 200 if days_searched == 0 else 100
-                
+                query_page = page if days_searched == 0 and page > 1 else 1
+
                 result = self.client.search_tenders(
                     procurement_nature=procurement_nature,
                     date_type="isDate",
                     start_date=date_str,
                     end_date=date_str,
                     page_size=page_size
+                    , page=query_page
                 )
                 
                 if result.get('success'):
@@ -236,16 +242,23 @@ class ProcurementProcessor:
                         if filtered_tenders:
                             # 過濾掉要排除的ID
                             for tender in filtered_tenders:
-                                tender_id = tender.get('tender_id', '') or tender.get('tender_name', '')
-                                if tender_id not in exclude_ids:
-                                    all_tenders.append(tender)
+                                tender_id = (tender.get('tender_id', '') or tender.get('tender_name', ''))
+                                tender_name = tender.get('tender_name', '') or ''
+                                org_name = tender.get('org_name', '') or ''
+                                composite_key = f"{tender_name}|{org_name}"
+
+                                # 如果 ID 或者名稱+機關組合在排除清單中，跳過
+                                if tender_id in exclude_ids or composite_key in exclude_ids:
+                                    continue
+
+                                # 否則加入候選清單
+                                all_tenders.append(tender)
                             
                             logger.info(f"Found {len(filtered_tenders)} tenders on {date_str}, {len(all_tenders)} after excluding seen IDs")
                             
                             # 如果已經收集到足夠的標案，就停止
                             if len(all_tenders) >= limit:
                                 break
-                
             except Exception as e:
                 logger.error(f"Error searching date {date_str}: {e}")
             

@@ -146,7 +146,7 @@ class UserAnalytics:
         """
         try:
             response = self.client.table("user_browsing_state").select(
-                "category, seen_tender_ids, last_updated"
+                "category, seen_tender_ids, last_updated, page"
             ).eq("line_user_id", line_user_id).execute()
             
             if response.data and len(response.data) > 0:
@@ -158,7 +158,7 @@ class UserAnalytics:
             return None
     
     def update_browsing_state(self, line_user_id: str, category: str, 
-                            seen_tender_ids: List[str]) -> bool:
+                            seen_tender_ids: List[str], page: int = 1) -> bool:
         """
         更新使用者的瀏覽狀態
         
@@ -175,6 +175,7 @@ class UserAnalytics:
                 "line_user_id": line_user_id,
                 "category": category,
                 "seen_tender_ids": seen_tender_ids
+                ,"page": page
             }
             
             self.client.table("user_browsing_state").upsert(data).execute()

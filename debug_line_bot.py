@@ -38,6 +38,8 @@ def simulate_user_interaction(user_id="test_user"):
         "category": category,
         "seen_ids": seen_ids
     }
+    # 設定初始頁碼
+    user_tender_cache[user_id]["page"] = 1
     
     print(f"📝 快取建立：category={category}, seen_ids 數量={len(seen_ids)}")
     print(f"\n前 3 筆標案：")
@@ -65,8 +67,11 @@ def simulate_user_interaction(user_id="test_user"):
         print(f"   呼叫：get_procurements_by_category('{category}', limit=10, exclude_ids=[...{len(seen_ids)}筆])")
         
         # 這裡是關鍵！使用 exclude_ids 參數
+        # 嘗試使用 page 翻頁
+        page = user_tender_cache[user_id].get("page", 1)
+        next_page = page + 1
         new_tenders = processor.get_procurements_by_category(
-            category, limit=10, exclude_ids=seen_ids
+            category, limit=10, exclude_ids=seen_ids, page=next_page
         )
         
         if new_tenders:
@@ -97,6 +102,8 @@ def simulate_user_interaction(user_id="test_user"):
             # 更新快取
             cache["seen_ids"].extend(new_ids)
             user_tender_cache[user_id] = cache
+            # 更新頁數
+            user_tender_cache[user_id]["page"] = next_page
             
             print(f"\n📝 更新快取：total seen_ids={len(cache['seen_ids'])} 筆")
         else:

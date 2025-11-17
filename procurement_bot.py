@@ -296,15 +296,16 @@ def create_app():
                 if tenders:
                     analytics.log_tender_views_batch(user_id, tenders)
                     
-                    # 儲存已查看的標案ID（記憶體快取）
+                    # 儲存已查看的標案ID（記憶體快取），並記錄目前頁數（page）
                     seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
                     user_tender_cache[user_id] = {
                         "category": category,
-                        "seen_ids": seen_ids
+                        "seen_ids": seen_ids,
+                        "page": 1
                     }
                     
                     # 同時更新資料庫的瀏覽狀態
-                    analytics.update_browsing_state(user_id, category, seen_ids)
+                    analytics.update_browsing_state(user_id, category, seen_ids, page=1)
                 
                 # 加入「更多標案」按鈕
                 quick_reply = QuickReply(items=[
@@ -342,15 +343,16 @@ def create_app():
                 if tenders:
                     analytics.log_tender_views_batch(user_id, tenders)
                     
-                    # 儲存已查看的標案ID
+                    # 儲存已查看的標案ID，並記錄 page
                     seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
                     user_tender_cache[user_id] = {
                         "category": category,
-                        "seen_ids": seen_ids
+                        "seen_ids": seen_ids,
+                        "page": 1
                     }
                     
                     # 更新資料庫的瀏覽狀態
-                    analytics.update_browsing_state(user_id, category, seen_ids)
+                    analytics.update_browsing_state(user_id, category, seen_ids, page=1)
                 
                 # 加入「更多標案」按鈕
                 quick_reply = QuickReply(items=[
@@ -388,15 +390,16 @@ def create_app():
                 if tenders:
                     analytics.log_tender_views_batch(user_id, tenders)
                     
-                    # 儲存已查看的標案ID
+                    # 儲存已查看的標案ID，並記錄 page
                     seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
                     user_tender_cache[user_id] = {
                         "category": category,
-                        "seen_ids": seen_ids
+                        "seen_ids": seen_ids,
+                        "page": 1
                     }
                     
                     # 更新資料庫的瀏覽狀態
-                    analytics.update_browsing_state(user_id, category, seen_ids)
+                    analytics.update_browsing_state(user_id, category, seen_ids, page=1)
                 
                 # 加入「更多標案」按鈕
                 quick_reply = QuickReply(items=[
@@ -439,7 +442,8 @@ def create_app():
                     if db_state and db_state.get("category") == category:
                         cache = {
                             "category": db_state["category"],
-                            "seen_ids": db_state.get("seen_tender_ids", [])
+                            "seen_ids": db_state.get("seen_tender_ids", []),
+                            "page": db_state.get("page", 1)
                         }
                         user_tender_cache[user_id] = cache
                         logger.info(f"Loaded {len(cache['seen_ids'])} seen IDs from database")
@@ -449,14 +453,24 @@ def create_app():
                 if category and cache.get("category") == category:
                     # 取得已看過的ID
                     seen_ids = cache.get("seen_ids", [])
+                    # 頁碼：記錄到快取，可透過更多按鈕翻頁
+                    current_page = cache.get("page", 1)
+                    next_page = current_page + 1
                     
                     logger.info(f"Requesting more {category} tenders, excluding {len(seen_ids)} seen IDs")
                     logger.info(f"First 3 excluded IDs: {seen_ids[:3] if seen_ids else 'None'}")
                     
                     # 取得更多標案，直接排除已看過的ID（只要10筆新的）
+                    # 先嘗試使用頁碼 (page) 來取得不重複內容
                     new_tenders = procurement_processor.get_procurements_by_category(
-                        category, limit=10, exclude_ids=seen_ids
+                        category, limit=10, exclude_ids=seen_ids, page=next_page
                     )
+
+                    # 如果使用 page 查詢仍然回傳舊資料（或查不到新資料），再退回到多天查詢
+                    if not new_tenders:
+                        new_tenders = procurement_processor.get_procurements_by_category(
+                            category, limit=10, exclude_ids=seen_ids
+                        )
                     
                     logger.info(f"Received {len(new_tenders)} new tenders")
                     if new_tenders:
@@ -486,10 +500,12 @@ def create_app():
                         # 更新已看過的ID
                         new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
                         cache["seen_ids"].extend(new_ids)
+                        # 更新頁碼
+                        cache["page"] = next_page
                         user_tender_cache[user_id] = cache
                         
                         # 同時更新資料庫的瀏覽狀態
-                        analytics.update_browsing_state(user_id, category, cache["seen_ids"])
+                        analytics.update_browsing_state(user_id, category, cache["seen_ids"], page=cache.get("page", 1))
                         
                         # 顯示新標案，並繼續提供「更多」按鈕
                         quick_reply = QuickReply(items=[

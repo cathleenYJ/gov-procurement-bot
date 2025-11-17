@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS user_browsing_state (
   line_user_id TEXT PRIMARY KEY,
   category TEXT NOT NULL,               -- 目前瀏覽的類別
   seen_tender_ids TEXT[] DEFAULT '{}',  -- 已看過的標案ID陣列
+  page INTEGER DEFAULT 1,               -- 使用者目前的分頁（從 1 開始），用於更多按鈕翻頁
   last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
   CONSTRAINT fk_user_browsing FOREIGN KEY (line_user_id) 
