@@ -118,10 +118,17 @@ class ProcurementProcessor:
             logger.error(f"Error getting high value procurements: {e}")
             return []
 
-    def get_procurements_by_category(self, category: str = "工程類", limit: int = 10, max_days_back: int = 30) -> List[Dict[str, Any]]:
+    def get_procurements_by_category(self, category: str = "工程類", limit: int = 10, 
+                                    max_days_back: int = 30, exclude_ids: List[str] = None) -> List[Dict[str, Any]]:
         """根據採購性質獲取標案，如果當日沒有資料則往前查詢
         
         當 limit > 10 時，會跨多天查詢以取得更多標案
+        
+        Args:
+            category: 採購類別（工程類/財物類/勞務類）
+            limit: 要取得的標案數量
+            max_days_back: 最多往前查詢幾天
+            exclude_ids: 要排除的標案ID列表（用於「更多標案」功能）
         """
         try:
             # 映射採購性質
@@ -133,10 +140,11 @@ class ProcurementProcessor:
             }
             
             procurement_nature = nature_map.get(category, "RAD_PROCTRG_CATE_1")
+            exclude_ids = exclude_ids or []
             
             # 如果需要大量資料（limit > 10），跨多天查詢
-            if limit > 10:
-                return self._get_procurements_multi_day(procurement_nature, category, limit, max_days_back)
+            if limit > 10 or exclude_ids:
+                return self._get_procurements_multi_day(procurement_nature, category, limit, max_days_back, exclude_ids)
             
             # 一般查詢：從今天開始往前查詢，直到找到資料為止
             today = datetime.now()
@@ -180,16 +188,24 @@ class ProcurementProcessor:
             return []
     
     def _get_procurements_multi_day(self, procurement_nature: str, category: str, 
-                                   limit: int, max_days_back: int) -> List[Dict[str, Any]]:
+                                   limit: int, max_days_back: int, exclude_ids: List[str] = None) -> List[Dict[str, Any]]:
         """跨多天查詢標案（用於「更多標案」功能）
         
         策略：優先把當天的資料抓完，再往前查詢其他天
+        
+        Args:
+            procurement_nature: 採購性質代碼
+            category: 採購類別名稱
+            limit: 需要的標案數量
+            max_days_back: 最多往前查詢幾天
+            exclude_ids: 要排除的標案ID列表
         """
         all_tenders = []
         today = datetime.now()
         days_searched = 0
+        exclude_ids = set(exclude_ids or [])
         
-        logger.info(f"Multi-day search for {category}, need {limit} tenders")
+        logger.info(f"Multi-day search for {category}, need {limit} tenders, excluding {len(exclude_ids)} IDs")
         
         # 持續往前查詢直到收集足夠的標案
         while len(all_tenders) < limit and days_searched < max_days_back:
@@ -216,15 +232,17 @@ class ProcurementProcessor:
                         # 過濾和評分
                         filtered_tenders = self._filter_and_rank_tenders(tenders)
                         if filtered_tenders:
-                            logger.info(f"Found {len(filtered_tenders)} tenders on {date_str}")
+                            # 過濾掉要排除的ID
+                            for tender in filtered_tenders:
+                                tender_id = tender.get('tender_id', '') or tender.get('tender_name', '')
+                                if tender_id not in exclude_ids:
+                                    all_tenders.append(tender)
                             
-                            # 如果是當天且資料充足，優先用完當天的資料
-                            if days_searched == 0 and len(filtered_tenders) >= limit:
-                                logger.info(f"Today has {len(filtered_tenders)} tenders, using all from today first")
-                                all_tenders = filtered_tenders
+                            logger.info(f"Found {len(filtered_tenders)} tenders on {date_str}, {len(all_tenders)} after excluding seen IDs")
+                            
+                            # 如果已經收集到足夠的標案，就停止
+                            if len(all_tenders) >= limit:
                                 break
-                            else:
-                                all_tenders.extend(filtered_tenders)
                 
             except Exception as e:
                 logger.error(f"Error searching date {date_str}: {e}")

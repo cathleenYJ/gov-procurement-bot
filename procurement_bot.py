@@ -430,20 +430,13 @@ def create_app():
                 cache = user_tender_cache.get(user_id, {})
                 
                 if category and cache.get("category") == category:
-                    # 取得更多標案（限制最多50筆）
-                    all_tenders = procurement_processor.get_procurements_by_category(
-                        category, limit=50
-                    )
+                    # 取得已看過的ID
+                    seen_ids = cache.get("seen_ids", [])
                     
-                    # 過濾掉已看過的
-                    seen_ids = set(cache.get("seen_ids", []))
-                    new_tenders = []
-                    for tender in all_tenders:
-                        tender_id = tender.get('tender_id', '') or tender.get('tender_name', '')
-                        if tender_id not in seen_ids:
-                            new_tenders.append(tender)
-                            if len(new_tenders) >= 10:  # 只取10筆新的
-                                break
+                    # 取得更多標案，直接排除已看過的ID（只要10筆新的）
+                    new_tenders = procurement_processor.get_procurements_by_category(
+                        category, limit=10, exclude_ids=seen_ids
+                    )
                     
                     if new_tenders:
                         # 記錄「更多標案」查詢行為
