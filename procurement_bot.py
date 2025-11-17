@@ -16,6 +16,7 @@ import os
 import logging
 from procurement_processors import ProcurementProcessor
 from clients.supabase_client import SupabaseClient
+from clients.analytics_client import UserAnalytics
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # === 使用者狀態管理 ===
 user_states = {}  # user_id -> {"state": "ask_company", "data": {...}}
+user_tender_cache = {}  # user_id -> {"category": "工程類", "seen_ids": [], "search_date": "2025/11/17"}
 
 # === Supabase 客戶端初始化 ===
 def init_supabase():
@@ -68,6 +70,8 @@ def create_app():
     # 初始化 Supabase 客戶端
     try:
         supabase_client = init_supabase()
+        # 初始化行為分析模組
+        analytics = UserAnalytics(supabase_client)
     except Exception as e:
         logger.error(f"Failed to initialize Supabase: {e}")
         return app
@@ -274,30 +278,229 @@ def create_app():
                 
             elif "工程類" in user_message or user_message_lower in ["工程", "1", "1."]:
                 # 工程類採購
+                category = "工程類"
                 tenders = procurement_processor.get_procurements_by_category(
-                    "工程類", limit=5
+                    category, limit=10
                 )
+                
+                # 記錄查詢行為
+                analytics.log_query(
+                    line_user_id=user_id,
+                    query_type="工程類查詢",
+                    query_text=user_message,
+                    category=category,
+                    result_count=len(tenders)
+                )
+                
+                # 記錄標案瀏覽
+                if tenders:
+                    analytics.log_tender_views_batch(user_id, tenders)
+                    
+                    # 儲存已查看的標案ID（記憶體快取）
+                    seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
+                    user_tender_cache[user_id] = {
+                        "category": category,
+                        "seen_ids": seen_ids
+                    }
+                    
+                    # 同時更新資料庫的瀏覽狀態
+                    analytics.update_browsing_state(user_id, category, seen_ids)
+                
+                # 加入「更多標案」按鈕
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="📋 更多工程類標案", text="更多工程類")),
+                    QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                ])
+                
                 response_text = procurement_processor.format_multiple_tenders(
                     tenders, "工程類採購"
                 )
                 
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text, quick_reply=quick_reply)
+                )
+                return
+                
             elif "財物類" in user_message or user_message_lower in ["財物", "2", "2."]:
                 # 財物類採購
+                category = "財物類"
                 tenders = procurement_processor.get_procurements_by_category(
-                    "財物類", limit=5
+                    category, limit=10
                 )
+                
+                # 記錄查詢行為
+                analytics.log_query(
+                    line_user_id=user_id,
+                    query_type="財物類查詢",
+                    query_text=user_message,
+                    category=category,
+                    result_count=len(tenders)
+                )
+                
+                # 記錄標案瀏覽
+                if tenders:
+                    analytics.log_tender_views_batch(user_id, tenders)
+                    
+                    # 儲存已查看的標案ID
+                    seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
+                    user_tender_cache[user_id] = {
+                        "category": category,
+                        "seen_ids": seen_ids
+                    }
+                    
+                    # 更新資料庫的瀏覽狀態
+                    analytics.update_browsing_state(user_id, category, seen_ids)
+                
+                # 加入「更多標案」按鈕
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="📋 更多財物類標案", text="更多財物類")),
+                    QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                ])
+                
                 response_text = procurement_processor.format_multiple_tenders(
                     tenders, "財物類採購"
                 )
                 
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text, quick_reply=quick_reply)
+                )
+                return
+                
             elif "勞務類" in user_message or user_message_lower in ["勞務", "3", "3."]:
                 # 勞務類採購
+                category = "勞務類"
                 tenders = procurement_processor.get_procurements_by_category(
-                    "勞務類", limit=5
+                    category, limit=10
                 )
+                
+                # 記錄查詢行為
+                analytics.log_query(
+                    line_user_id=user_id,
+                    query_type="勞務類查詢",
+                    query_text=user_message,
+                    category=category,
+                    result_count=len(tenders)
+                )
+                
+                # 記錄標案瀏覽
+                if tenders:
+                    analytics.log_tender_views_batch(user_id, tenders)
+                    
+                    # 儲存已查看的標案ID
+                    seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
+                    user_tender_cache[user_id] = {
+                        "category": category,
+                        "seen_ids": seen_ids
+                    }
+                    
+                    # 更新資料庫的瀏覽狀態
+                    analytics.update_browsing_state(user_id, category, seen_ids)
+                
+                # 加入「更多標案」按鈕
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="📋 更多勞務類標案", text="更多勞務類")),
+                    QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                ])
+                
                 response_text = procurement_processor.format_multiple_tenders(
                     tenders, "勞務類採購"
                 )
+                
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text, quick_reply=quick_reply)
+                )
+                return
+            
+            # === 處理「更多標案」請求 ===
+            elif user_message in ["更多工程類", "更多財物類", "更多勞務類"]:
+                # 解析類別
+                if "工程" in user_message:
+                    category = "工程類"
+                elif "財物" in user_message:
+                    category = "財物類"
+                elif "勞務" in user_message:
+                    category = "勞務類"
+                else:
+                    category = None
+                
+                # 檢查是否有快取的已看標案
+                cache = user_tender_cache.get(user_id, {})
+                
+                if category and cache.get("category") == category:
+                    # 取得更多標案（限制最多50筆）
+                    all_tenders = procurement_processor.get_procurements_by_category(
+                        category, limit=50
+                    )
+                    
+                    # 過濾掉已看過的
+                    seen_ids = set(cache.get("seen_ids", []))
+                    new_tenders = []
+                    for tender in all_tenders:
+                        tender_id = tender.get('tender_id', '') or tender.get('tender_name', '')
+                        if tender_id not in seen_ids:
+                            new_tenders.append(tender)
+                            if len(new_tenders) >= 10:  # 只取10筆新的
+                                break
+                    
+                    if new_tenders:
+                        # 記錄「更多標案」查詢行為
+                        analytics.log_query(
+                            line_user_id=user_id,
+                            query_type="更多標案",
+                            query_text=user_message,
+                            category=category,
+                            result_count=len(new_tenders)
+                        )
+                        
+                        # 記錄新標案瀏覽
+                        analytics.log_tender_views_batch(user_id, new_tenders)
+                        
+                        # 更新已看過的ID
+                        new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
+                        cache["seen_ids"].extend(new_ids)
+                        user_tender_cache[user_id] = cache
+                        
+                        # 同時更新資料庫的瀏覽狀態
+                        analytics.update_browsing_state(user_id, category, cache["seen_ids"])
+                        
+                        # 顯示新標案，並繼續提供「更多」按鈕
+                        quick_reply = QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label=f"📋 更多{category}標案", text=f"更多{category[:-1]}")),
+                            QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                        ])
+                        
+                        response_text = procurement_processor.format_multiple_tenders(
+                            new_tenders, f"{category}採購（續）"
+                        )
+                        
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=response_text, quick_reply=quick_reply)
+                        )
+                    else:
+                        # 沒有更多新標案了
+                        quick_reply = QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label="🔄 重新查詢", text=category)),
+                            QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+                        ])
+                        
+                        response_text = f"目前沒有更多{category}標案了。\n\n您可以：\n• 重新查詢以更新資料\n• 查看其他分類的標案"
+                        
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=response_text, quick_reply=quick_reply)
+                        )
+                else:
+                    # 沒有快取，重新查詢
+                    response_text = f"請先查詢{category}標案"
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=response_text)
+                    )
+                return
                 
             elif user_message_lower in ["help", "幫助", "指令", "?"]:
                 # 幫助訊息
@@ -483,6 +686,123 @@ def create_app():
             return jsonify({
                 "status": "error",
                 "message": f"獲取資料失敗: {str(e)}"
+            }), 500
+
+    @app.route("/admin/analytics/daily")
+    def admin_analytics_daily():
+        """管理端點：每日查詢統計（需要密碼）"""
+        auth_password = request.args.get('password', '')
+        
+        if auth_password != ADMIN_PASSWORD:
+            return jsonify({
+                "status": "error",
+                "message": "未授權訪問"
+            }), 401
+        
+        try:
+            days = int(request.args.get('days', 7))
+            stats = analytics.get_daily_stats(days=days)
+            
+            return jsonify({
+                "status": "success",
+                "days": days,
+                "data": stats
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching daily analytics: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"獲取統計失敗: {str(e)}"
+            }), 500
+
+    @app.route("/admin/analytics/popular")
+    def admin_analytics_popular():
+        """管理端點：熱門標案排行（需要密碼）"""
+        auth_password = request.args.get('password', '')
+        
+        if auth_password != ADMIN_PASSWORD:
+            return jsonify({
+                "status": "error",
+                "message": "未授權訪問"
+            }), 401
+        
+        try:
+            limit = int(request.args.get('limit', 10))
+            tenders = analytics.get_popular_tenders(limit=limit)
+            
+            return jsonify({
+                "status": "success",
+                "total": len(tenders),
+                "data": tenders
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching popular tenders: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"獲取熱門標案失敗: {str(e)}"
+            }), 500
+
+    @app.route("/admin/analytics/active-users")
+    def admin_analytics_active_users():
+        """管理端點：活躍使用者排行（需要密碼）"""
+        auth_password = request.args.get('password', '')
+        
+        if auth_password != ADMIN_PASSWORD:
+            return jsonify({
+                "status": "error",
+                "message": "未授權訪問"
+            }), 401
+        
+        try:
+            limit = int(request.args.get('limit', 10))
+            users = analytics.get_active_users(limit=limit)
+            
+            return jsonify({
+                "status": "success",
+                "total": len(users),
+                "data": users
+            })
+            
+        except Exception as e:
+            logger.error(f"Error fetching active users: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"獲取活躍使用者失敗: {str(e)}"
+            }), 500
+
+    @app.route("/admin/analytics/user/<user_id>")
+    def admin_analytics_user(user_id):
+        """管理端點：特定使用者的統計資料（需要密碼）"""
+        auth_password = request.args.get('password', '')
+        
+        if auth_password != ADMIN_PASSWORD:
+            return jsonify({
+                "status": "error",
+                "message": "未授權訪問"
+            }), 401
+        
+        try:
+            stats = analytics.get_user_stats(user_id)
+            
+            if stats:
+                return jsonify({
+                    "status": "success",
+                    "user_id": user_id,
+                    "stats": stats
+                })
+            else:
+                return jsonify({
+                    "status": "not_found",
+                    "message": "找不到此使用者的統計資料"
+                }), 404
+                
+        except Exception as e:
+            logger.error(f"Error fetching user stats: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"獲取使用者統計失敗: {str(e)}"
             }), 500
 
     return app
