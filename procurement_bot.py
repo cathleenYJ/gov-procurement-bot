@@ -72,8 +72,10 @@ def create_app():
         supabase_client = init_supabase()
         # 初始化行為分析模組
         analytics = UserAnalytics(supabase_client)
-        # 是否禁用記憶體快取（方便在開發或測試時避免快取造成的結果重複）
+        # 是否禁用本地記憶體快取（方便在開發或測試時避免快取造成的結果重複）
         DISABLE_MEMORY_CACHE = os.getenv('DISABLE_MEMORY_CACHE', 'false').lower() in ('true', '1', 'yes')
+        # 是否完全跳過 DB 的 browsing state（在測試時可避免數據庫的歷史 state 影響結果）
+        BYPASS_DB_BROWSING = os.getenv('BYPASS_DB_BROWSING', 'false').lower() in ('true', '1', 'yes')
     except Exception as e:
         logger.error(f"Failed to initialize Supabase: {e}")
         return app
@@ -420,7 +422,7 @@ def create_app():
                 return
             
             # === 處理「更多標案」請求 ===
-            elif user_message in ["更多工程類", "更多財物類", "更多勞務類"]:
+            elif user_message.startswith("更多") and any(x in user_message for x in ["工程", "財物", "勞務", "工程類", "財物類", "勞務類"]):
                 # 解析類別
                 if "工程" in user_message:
                     category = "工程類"
@@ -435,7 +437,7 @@ def create_app():
                 
                 # 為避免跨進程快取不一致，優先從資料庫取得最新的快取狀態（然後更新記憶體）
                 # 這樣不同進程或多台機器能共享同一個 browsing state
-                db_state = analytics.get_browsing_state(user_id)
+                db_state = None if BYPASS_DB_BROWSING else analytics.get_browsing_state(user_id)
                 cache = user_tender_cache.get(user_id, {})
 
                 if db_state and db_state.get("category") == category:
@@ -454,7 +456,7 @@ def create_app():
                 # 如果記憶體快取不存在或類別不匹配，從資料庫讀取
                 if not cache or cache.get("category") != category:
                     logger.info(f"Memory cache not found for {user_id}, loading from database...")
-                    db_state = analytics.get_browsing_state(user_id)
+                    db_state = None if BYPASS_DB_BROWSING else analytics.get_browsing_state(user_id)
                     if db_state and db_state.get("category") == category:
                         cache = {
                             "category": db_state["category"],
@@ -486,9 +488,34 @@ def create_app():
                     
                     # 取得更多標案，直接排除已看過的ID（只要10筆新的）
                     # 先嘗試使用頁碼 (page) 來取得不重複內容
-                    new_tenders = procurement_processor.get_procurements_by_category(
-                        category, limit=10, exclude_ids=seen_ids, page=next_page
-                    )
+                    # Retry strategy: try up to 3 subsequent pages to avoid duplicates between pages
+                    MAX_RETRIES = 3
+                    attempt = 0
+                    new_tenders = []
+                    candidate_page = next_page
+                    while attempt < MAX_RETRIES and not new_tenders:
+                        logger.info(f"Attempt {attempt+1} fetching page {candidate_page} for {category}")
+                        candidate = procurement_processor.get_procurements_by_category(
+                            category, limit=10, exclude_ids=seen_ids, page=candidate_page
+                        )
+
+                        # 手動過濾以防止因 site 行為或 id 格式差異造成的重複
+                        filtered_candidate = []
+                        for t in candidate:
+                            t_id = t.get('tender_id', '') or t.get('tender_name', '')
+                            t_key = f"{t.get('tender_name','')}|{t.get('org_name','')}"
+                            if t_id in seen_ids or t_key in seen_ids:
+                                continue
+                            filtered_candidate.append(t)
+
+                        if filtered_candidate:
+                            new_tenders = filtered_candidate[:10]
+                            logger.info(f"Found {len(new_tenders)} filtered tenders from page {candidate_page}")
+                            break
+
+                        # 下一次嘗試下一頁
+                        attempt += 1
+                        candidate_page += 1
 
                     # 如果使用 page 查詢仍然回傳舊資料（或查不到新資料），再退回到多天查詢
                     if not new_tenders:
@@ -506,7 +533,7 @@ def create_app():
                         if len(overlap) > 0:
                             logger.error(f"❌ Found {len(overlap)} duplicate IDs: {list(overlap)[:3]}")
                         else:
-                            logger.info(f"✅ No duplicates found")
+                            logger.info("✅ No duplicates found")
                     
                     if new_tenders:
                         # 記錄「更多標案」查詢行為
@@ -525,11 +552,13 @@ def create_app():
                         new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
                         cache["seen_ids"].extend(new_ids)
                         # 更新頁碼
-                        cache["page"] = next_page
+                        # 把 page 更新為我們最後實際使用的 candidate_page - 如果沒有修改，使用 next_page
+                        cache["page"] = candidate_page if 'candidate_page' in locals() else next_page
                         user_tender_cache[user_id] = cache
                         
                         # 同時更新資料庫的瀏覽狀態
                         ok = analytics.update_browsing_state(user_id, category, cache["seen_ids"], page=cache.get("page", 1))
+                        logger.info(f"update_browsing_state returned: {ok} for user={user_id}")
                         if not ok:
                             logger.warning(f"Failed to persist browsing state for {user_id} - cache will be held in memory only")
                         
