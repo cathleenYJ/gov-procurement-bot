@@ -119,7 +119,10 @@ class ProcurementProcessor:
             return []
 
     def get_procurements_by_category(self, category: str = "工程類", limit: int = 10, max_days_back: int = 30) -> List[Dict[str, Any]]:
-        """根據採購性質獲取標案，如果當日沒有資料則往前查詢"""
+        """根據採購性質獲取標案，如果當日沒有資料則往前查詢
+        
+        當 limit > 10 時，會跨多天查詢以取得更多標案
+        """
         try:
             # 映射採購性質
             nature_map = {
@@ -131,7 +134,11 @@ class ProcurementProcessor:
             
             procurement_nature = nature_map.get(category, "RAD_PROCTRG_CATE_1")
             
-            # 從今天開始往前查詢，直到找到資料為止
+            # 如果需要大量資料（limit > 10），跨多天查詢
+            if limit > 10:
+                return self._get_procurements_multi_day(procurement_nature, category, limit, max_days_back)
+            
+            # 一般查詢：從今天開始往前查詢，直到找到資料為止
             today = datetime.now()
             days_searched = 0
             
@@ -171,6 +178,72 @@ class ProcurementProcessor:
         except Exception as e:
             logger.error(f"Error getting procurements by category: {e}")
             return []
+    
+    def _get_procurements_multi_day(self, procurement_nature: str, category: str, 
+                                   limit: int, max_days_back: int) -> List[Dict[str, Any]]:
+        """跨多天查詢標案（用於「更多標案」功能）
+        
+        策略：優先把當天的資料抓完，再往前查詢其他天
+        """
+        all_tenders = []
+        today = datetime.now()
+        days_searched = 0
+        
+        logger.info(f"Multi-day search for {category}, need {limit} tenders")
+        
+        # 持續往前查詢直到收集足夠的標案
+        while len(all_tenders) < limit and days_searched < max_days_back:
+            target_date = today - timedelta(days=days_searched)
+            date_str = target_date.strftime("%Y/%m/%d")
+            
+            logger.info(f"Searching {category} for date: {date_str} (currently have {len(all_tenders)} tenders)")
+            
+            try:
+                # 第一天（當天）抓取更多資料，確保能涵蓋所有當天標案
+                page_size = 200 if days_searched == 0 else 100
+                
+                result = self.client.search_tenders(
+                    procurement_nature=procurement_nature,
+                    date_type="isDate",
+                    start_date=date_str,
+                    end_date=date_str,
+                    page_size=page_size
+                )
+                
+                if result.get('success'):
+                    tenders = result.get('data', [])
+                    if tenders:
+                        # 過濾和評分
+                        filtered_tenders = self._filter_and_rank_tenders(tenders)
+                        if filtered_tenders:
+                            logger.info(f"Found {len(filtered_tenders)} tenders on {date_str}")
+                            
+                            # 如果是當天且資料充足，優先用完當天的資料
+                            if days_searched == 0 and len(filtered_tenders) >= limit:
+                                logger.info(f"Today has {len(filtered_tenders)} tenders, using all from today first")
+                                all_tenders = filtered_tenders
+                                break
+                            else:
+                                all_tenders.extend(filtered_tenders)
+                
+            except Exception as e:
+                logger.error(f"Error searching date {date_str}: {e}")
+            
+            days_searched += 1
+        
+        # 去重（根據標案名稱+機關名稱）
+        seen = set()
+        unique_tenders = []
+        for tender in all_tenders:
+            key = (tender.get('tender_name', ''), tender.get('org_name', ''))
+            if key not in seen:
+                seen.add(key)
+                unique_tenders.append(tender)
+        
+        logger.info(f"Multi-day search complete: {len(unique_tenders)} unique tenders from {days_searched} days")
+        
+        # 返回指定數量
+        return unique_tenders[:limit]
 
     def _filter_and_rank_tenders(self, tenders: List[Dict[str, Any]], keywords: List[str] = None) -> List[Dict[str, Any]]:
         """篩選和排序標案"""
