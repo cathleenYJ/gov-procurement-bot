@@ -170,8 +170,10 @@ class ProcurementProcessor:
                         filtered_tenders = self._filter_and_rank_tenders(tenders)
                         if filtered_tenders:
                             logger.info(f"Found {len(filtered_tenders)} tenders for {category} on {date_str}")
-                            # 在第一筆資料中加入查詢日期資訊
+                            # 在返回的標案中加入 category 欄位
                             result_tenders = filtered_tenders[:limit]
+                            for tender in result_tenders:
+                                tender['category'] = category
                             if result_tenders and days_searched > 0:
                                 result_tenders[0]['_search_date'] = date_str
                             return result_tenders
@@ -259,6 +261,10 @@ class ProcurementProcessor:
                 unique_tenders.append(tender)
         
         logger.info(f"Multi-day search complete: {len(unique_tenders)} unique tenders from {days_searched} days")
+        
+        # 在返回的標案中加入 category 欄位
+        for tender in unique_tenders:
+            tender['category'] = category
         
         # 返回指定數量
         return unique_tenders[:limit]

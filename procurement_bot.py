@@ -426,8 +426,11 @@ def create_app():
                 else:
                     category = None
                 
+                logger.info(f"=== 更多標案請求 === User: {user_id}, Category: {category}")
+                
                 # 檢查快取：優先從記憶體，其次從資料庫
                 cache = user_tender_cache.get(user_id, {})
+                logger.info(f"Memory cache: {cache.get('category') if cache else None}, seen_ids: {len(cache.get('seen_ids', []))}")
                 
                 # 如果記憶體快取不存在或類別不匹配，從資料庫讀取
                 if not cache or cache.get("category") != category:
@@ -440,17 +443,32 @@ def create_app():
                         }
                         user_tender_cache[user_id] = cache
                         logger.info(f"Loaded {len(cache['seen_ids'])} seen IDs from database")
+                    else:
+                        logger.warning(f"No cache found in database either. DB state: {db_state}")
                 
                 if category and cache.get("category") == category:
                     # 取得已看過的ID
                     seen_ids = cache.get("seen_ids", [])
                     
                     logger.info(f"Requesting more {category} tenders, excluding {len(seen_ids)} seen IDs")
+                    logger.info(f"First 3 excluded IDs: {seen_ids[:3] if seen_ids else 'None'}")
                     
                     # 取得更多標案，直接排除已看過的ID（只要10筆新的）
                     new_tenders = procurement_processor.get_procurements_by_category(
                         category, limit=10, exclude_ids=seen_ids
                     )
+                    
+                    logger.info(f"Received {len(new_tenders)} new tenders")
+                    if new_tenders:
+                        new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
+                        logger.info(f"First 3 new IDs: {new_ids[:3]}")
+                        
+                        # 檢查重複（debug用）
+                        overlap = set(seen_ids) & set(new_ids)
+                        if len(overlap) > 0:
+                            logger.error(f"❌ Found {len(overlap)} duplicate IDs: {list(overlap)[:3]}")
+                        else:
+                            logger.info(f"✅ No duplicates found")
                     
                     if new_tenders:
                         # 記錄「更多標案」查詢行為
