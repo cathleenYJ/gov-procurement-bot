@@ -426,12 +426,26 @@ def create_app():
                 else:
                     category = None
                 
-                # 檢查是否有快取的已看標案
+                # 檢查快取：優先從記憶體，其次從資料庫
                 cache = user_tender_cache.get(user_id, {})
+                
+                # 如果記憶體快取不存在或類別不匹配，從資料庫讀取
+                if not cache or cache.get("category") != category:
+                    logger.info(f"Memory cache not found for {user_id}, loading from database...")
+                    db_state = analytics.get_browsing_state(user_id)
+                    if db_state and db_state.get("category") == category:
+                        cache = {
+                            "category": db_state["category"],
+                            "seen_ids": db_state.get("seen_tender_ids", [])
+                        }
+                        user_tender_cache[user_id] = cache
+                        logger.info(f"Loaded {len(cache['seen_ids'])} seen IDs from database")
                 
                 if category and cache.get("category") == category:
                     # 取得已看過的ID
                     seen_ids = cache.get("seen_ids", [])
+                    
+                    logger.info(f"Requesting more {category} tenders, excluding {len(seen_ids)} seen IDs")
                     
                     # 取得更多標案，直接排除已看過的ID（只要10筆新的）
                     new_tenders = procurement_processor.get_procurements_by_category(
