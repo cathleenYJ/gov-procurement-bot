@@ -72,6 +72,8 @@ def create_app():
         supabase_client = init_supabase()
         # 初始化行為分析模組
         analytics = UserAnalytics(supabase_client)
+        # 是否禁用記憶體快取（方便在開發或測試時避免快取造成的結果重複）
+        DISABLE_MEMORY_CACHE = os.getenv('DISABLE_MEMORY_CACHE', 'false').lower() in ('true', '1', 'yes')
     except Exception as e:
         logger.error(f"Failed to initialize Supabase: {e}")
         return app
@@ -468,6 +470,13 @@ def create_app():
                     # 取得已看過的ID
                     seen_ids = cache.get("seen_ids", [])
                     logger.info(f"More request: user={user_id}, category={category}, cached_seen={len(seen_ids)}, cache_page={cache.get('page')}")
+                    # 當開發或測試想要完全跳過本地記憶體快取時，可設置環境變數 DISABLE_MEMORY_CACHE=True
+                    # 若設定為 True，將會忽略記憶體快取的 seen_ids（只會採用分頁 page），以確保每次查詢都是新的頁面
+                    if DISABLE_MEMORY_CACHE:
+                        logger.info("DISABLE_MEMORY_CACHE is enabled - ignoring memory cache seen_ids and only using page")
+                        cache = {"category": category, "seen_ids": [], "page": cache.get('page', 1)}
+                        user_tender_cache[user_id] = cache
+
                     # 頁碼：記錄到快取，可透過更多按鈕翻頁
                     current_page = cache.get("page", 1)
                     next_page = current_page + 1
@@ -525,8 +534,9 @@ def create_app():
                             logger.warning(f"Failed to persist browsing state for {user_id} - cache will be held in memory only")
                         
                         # 顯示新標案，並繼續提供「更多」按鈕
+                        # 修正更多按鈕的傳回文字，確保使用者點擊「更多」時會被正確路由
                         quick_reply = QuickReply(items=[
-                            QuickReplyButton(action=MessageAction(label=f"📋 更多{category}標案", text=f"更多{category[:-1]}")),
+                            QuickReplyButton(action=MessageAction(label=f"📋 更多{category}標案", text=f"更多{category}")),
                             QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
                         ])
                         
@@ -590,6 +600,29 @@ def create_app():
 💡 使用方式：
 • 點擊圖文選單按鈕，選擇標案類別即可查詢
                 """.strip()
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text)
+                )
+                return
+
+            elif user_message in ["清除快取", "重設分頁", "clear cache"]:
+                # 清除使用者的記憶體快取與資料庫瀏覽狀態，方便在測試時取得不同頁的資料
+                cache = user_tender_cache.get(user_id, {})
+                category_for_clear = cache.get("category") if cache else ""
+
+                # 更新資料庫瀏覽狀態為清空
+                analytics.update_browsing_state(user_id, category_for_clear, [], page=1)
+
+                # 清除記憶體快取
+                user_tender_cache.pop(user_id, None)
+
+                response_text = "已清除本地快取並重設分頁 (page=1)。請重新查詢分類以取得最新結果。"
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text)
+                )
+                return
                 
             else:
                 # 預設回應 - 檢查使用者是否已登錄
