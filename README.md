@@ -14,6 +14,7 @@
 
 - **後端框架**：Flask + Line Bot SDK
 - **資料擷取**：requests + BeautifulSoup (解析HTML)
+- **資料庫**：Supabase (PostgreSQL)
 - **資料來源**：政府電子採購網 (https://web.pcc.gov.tw)
 - **部署方式**：支援本地開發和雲端部署（Vercel/Heroku）
 
@@ -45,8 +46,47 @@
 4. **環境配置**
    ```bash
    cp .env.example .env
-   # 編輯 .env 文件，填入 Line Bot 的 Token 和 Secret
+   # 編輯 .env 文件，填入以下資訊：
+   # - Line Bot 的 Token 和 Secret
+   # - Supabase URL 和 API Key
+   # - 管理員密碼
    ```
+
+5. **設定 Supabase 資料庫**
+   
+   a. 前往 [Supabase](https://supabase.com/) 建立免費帳號
+   
+   b. 建立新專案（New Project）
+   
+   c. 在 SQL Editor 中執行以下 SQL 建立資料表：
+   ```sql
+   CREATE TABLE users (
+     line_user_id TEXT PRIMARY KEY,
+     company TEXT NOT NULL,
+     contact_name TEXT NOT NULL,
+     email TEXT NOT NULL,
+     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+   );
+
+   -- 建立更新時間自動更新的觸發器
+   CREATE OR REPLACE FUNCTION update_updated_at_column()
+   RETURNS TRIGGER AS $$
+   BEGIN
+     NEW.updated_at = NOW();
+     RETURN NEW;
+   END;
+   $$ language 'plpgsql';
+
+   CREATE TRIGGER update_users_updated_at 
+     BEFORE UPDATE ON users 
+     FOR EACH ROW 
+     EXECUTE FUNCTION update_updated_at_column();
+   ```
+   
+   d. 從專案設定頁面複製以下資訊到 `.env` 檔案：
+   - `SUPABASE_URL`: Project URL (Settings > API)
+   - `SUPABASE_KEY`: anon public key (Settings > API)
 
 ## 使用方法
 

@@ -14,8 +14,8 @@ from linebot.models import (
 from dotenv import load_dotenv
 import os
 import logging
-import sqlite3
 from procurement_processors import ProcurementProcessor
+from clients.supabase_client import SupabaseClient
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
@@ -24,60 +24,24 @@ logger = logging.getLogger(__name__)
 # === 使用者狀態管理 ===
 user_states = {}  # user_id -> {"state": "ask_company", "data": {...}}
 
-# === 資料庫初始化 ===
-def init_db():
-    """初始化使用者資料庫"""
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users
-                 (line_user_id TEXT PRIMARY KEY,
-                  company TEXT,
-                  contact_name TEXT,
-                  email TEXT,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    conn.commit()
-    conn.close()
-    logger.info("Database initialized successfully")
+# === Supabase 客戶端初始化 ===
+def init_supabase():
+    """初始化 Supabase 客戶端"""
+    try:
+        supabase_client = SupabaseClient()
+        logger.info("Supabase client initialized successfully")
+        return supabase_client
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase client: {e}")
+        raise
 
-def save_user(user_id, company, contact_name, email):
+def save_user(supabase_client, user_id, company, contact_name, email):
     """儲存或更新使用者資料"""
-    try:
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute('''INSERT OR REPLACE INTO users 
-                     (line_user_id, company, contact_name, email, updated_at) 
-                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)''',
-                  (user_id, company, contact_name, email))
-        conn.commit()
-        conn.close()
-        logger.info(f"User data saved: {user_id}")
-        return True
-    except Exception as e:
-        logger.error(f"Error saving user data: {e}")
-        return False
+    return supabase_client.save_user(user_id, company, contact_name, email)
 
-def get_user(user_id):
+def get_user(supabase_client, user_id):
     """取得使用者資料"""
-    try:
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        c.execute('SELECT company, contact_name, email FROM users WHERE line_user_id = ?', (user_id,))
-        result = c.fetchone()
-        conn.close()
-        if result:
-            return {
-                'company': result[0],
-                'contact_name': result[1],
-                'email': result[2]
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Error getting user data: {e}")
-        return None
-
-# 初始化資料庫
-init_db()
+    return supabase_client.get_user(user_id)
 
 def create_app():
     """創建並配置 Flask 應用"""
@@ -100,6 +64,13 @@ def create_app():
 
     # 創建政府採購處理器實例
     procurement_processor = ProcurementProcessor()
+    
+    # 初始化 Supabase 客戶端
+    try:
+        supabase_client = init_supabase()
+    except Exception as e:
+        logger.error(f"Failed to initialize Supabase: {e}")
+        return app
 
     @app.route("/callback", methods=['POST'])
     def callback():
@@ -118,7 +89,7 @@ def create_app():
         
         try:
             # 檢查使用者是否已登錄
-            user_data = get_user(user_id)
+            user_data = get_user(supabase_client, user_id)
             
             if user_data:
                 # 已登錄過的使用者（重新加入）
@@ -196,7 +167,7 @@ def create_app():
                     data["email"] = user_message
                     
                     # 儲存到資料庫
-                    if save_user(user_id, data["company"], data["contact_name"], data["email"]):
+                    if save_user(supabase_client, user_id, data["company"], data["contact_name"], data["email"]):
                         response_text = f"""✅ 登錄完成！
 
 🏢 公司：{data['company']}
@@ -232,7 +203,7 @@ def create_app():
                 return
                 
             elif user_message_lower in ["修改資料", "更新資料"]:
-                user_data = get_user(user_id)
+                user_data = get_user(supabase_client, user_id)
                 if user_data:
                     response_text = f"""目前登錄資料：
 
@@ -251,7 +222,7 @@ def create_app():
                 return
                 
             elif user_message_lower in ["我的資料", "查看資料", "個人資料"] or user_message == "個人資料":
-                user_data = get_user(user_id)
+                user_data = get_user(supabase_client, user_id)
                 if user_data:
                     # 已有資料，顯示並詢問是否修改
                     quick_reply = QuickReply(items=[
@@ -361,7 +332,7 @@ def create_app():
                 
             else:
                 # 預設回應 - 檢查使用者是否已登錄
-                user_data = get_user(user_id)
+                user_data = get_user(supabase_client, user_id)
                 
                 if user_data:
                     # 已登錄使用者的歡迎訊息
@@ -466,26 +437,7 @@ def create_app():
             }), 401
         
         try:
-            conn = sqlite3.connect('users.db')
-            conn.row_factory = sqlite3.Row  # 讓結果可以用欄位名稱訪問
-            c = conn.cursor()
-            c.execute('''SELECT line_user_id, company, contact_name, email, 
-                         created_at, updated_at FROM users 
-                         ORDER BY created_at DESC''')
-            rows = c.fetchall()
-            conn.close()
-            
-            # 轉換為字典列表
-            users = []
-            for row in rows:
-                users.append({
-                    'line_user_id': row['line_user_id'],
-                    'company': row['company'],
-                    'contact_name': row['contact_name'],
-                    'email': row['email'],
-                    'created_at': row['created_at'],
-                    'updated_at': row['updated_at']
-                })
+            users = supabase_client.get_all_users()
             
             return jsonify({
                 "status": "success",
@@ -512,7 +464,7 @@ def create_app():
             }), 401
         
         try:
-            user_data = get_user(user_id)
+            user_data = get_user(supabase_client, user_id)
             
             if user_data:
                 return jsonify({

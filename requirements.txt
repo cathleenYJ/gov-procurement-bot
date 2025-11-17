@@ -6,3 +6,4 @@ line-bot-sdk
 lxml
 lxml_html_clean
 psutil
+supabase
