@@ -180,7 +180,7 @@ class UserAnalytics:
             
             self.client.table("user_browsing_state").upsert(data).execute()
             
-            logger.info(f"Browsing state updated: {line_user_id} - {category}")
+            logger.info(f"Browsing state updated: {line_user_id} - {category} (seen={len(seen_tender_ids)}, page={page})")
             return True
             
         except Exception as e:

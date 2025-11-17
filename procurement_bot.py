@@ -431,8 +431,22 @@ def create_app():
                 
                 logger.info(f"=== 更多標案請求 === User: {user_id}, Category: {category}")
                 
-                # 檢查快取：優先從記憶體，其次從資料庫
+                # 為避免跨進程快取不一致，優先從資料庫取得最新的快取狀態（然後更新記憶體）
+                # 這樣不同進程或多台機器能共享同一個 browsing state
+                db_state = analytics.get_browsing_state(user_id)
                 cache = user_tender_cache.get(user_id, {})
+
+                if db_state and db_state.get("category") == category:
+                    cache = {
+                        "category": db_state["category"],
+                        "seen_ids": db_state.get("seen_tender_ids", []),
+                        "page": db_state.get("page", 1)
+                    }
+                    user_tender_cache[user_id] = cache
+                    logger.info(f"Loaded browsing state from DB for {user_id}, seen={len(cache['seen_ids'])}, page={cache['page']}")
+                else:
+                    # fallback to memory cache if DB not available
+                    cache = user_tender_cache.get(user_id, {})
                 logger.info(f"Memory cache: {cache.get('category') if cache else None}, seen_ids: {len(cache.get('seen_ids', []))}")
                 
                 # 如果記憶體快取不存在或類別不匹配，從資料庫讀取
@@ -453,6 +467,7 @@ def create_app():
                 if category and cache.get("category") == category:
                     # 取得已看過的ID
                     seen_ids = cache.get("seen_ids", [])
+                    logger.info(f"More request: user={user_id}, category={category}, cached_seen={len(seen_ids)}, cache_page={cache.get('page')}")
                     # 頁碼：記錄到快取，可透過更多按鈕翻頁
                     current_page = cache.get("page", 1)
                     next_page = current_page + 1
@@ -472,7 +487,7 @@ def create_app():
                             category, limit=10, exclude_ids=seen_ids
                         )
                     
-                    logger.info(f"Received {len(new_tenders)} new tenders")
+                    logger.info(f"Received {len(new_tenders)} new tenders (user={user_id}, category={category}, page={next_page})")
                     if new_tenders:
                         new_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in new_tenders]
                         logger.info(f"First 3 new IDs: {new_ids[:3]}")
@@ -505,7 +520,9 @@ def create_app():
                         user_tender_cache[user_id] = cache
                         
                         # 同時更新資料庫的瀏覽狀態
-                        analytics.update_browsing_state(user_id, category, cache["seen_ids"], page=cache.get("page", 1))
+                        ok = analytics.update_browsing_state(user_id, category, cache["seen_ids"], page=cache.get("page", 1))
+                        if not ok:
+                            logger.warning(f"Failed to persist browsing state for {user_id} - cache will be held in memory only")
                         
                         # 顯示新標案，並繼續提供「更多」按鈕
                         quick_reply = QuickReply(items=[

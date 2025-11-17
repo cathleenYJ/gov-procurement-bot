@@ -142,6 +142,7 @@ class ProcurementProcessor:
             
             procurement_nature = nature_map.get(category, "RAD_PROCTRG_CATE_1")
             exclude_ids = exclude_ids or []
+            logger.debug(f"get_procurements_by_category called: category={category}, limit={limit}, exclude_count={len(exclude_ids)}, page={page}")
             
             # 如果需要大量資料（limit > 10），跨多天查詢
             if limit > 10 or exclude_ids or page > 1:
