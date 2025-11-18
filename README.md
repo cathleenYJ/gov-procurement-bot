@@ -198,6 +198,7 @@ gov-procurement-crawler/
 ├── procurement_bot.py               # 核心邏輯模塊
 ├── linebot_app.py                  # 本地開發入口
 ├── procurement_processors.py       # 採購資料處理器
+├── export_supabase_data.py         # Supabase 資料匯出工具
 ├── container.py                    # 依賴注入容器
 ├── clients/
 │   └── procurement_client.py       # 政府採購網客戶端
@@ -219,6 +220,11 @@ gov-procurement-crawler/
   - 政府採購資料抓取
   - 關鍵字搜尋和篩選
   - 資料格式化和排序
+
+- **`export_supabase_data.py`**：Supabase 資料匯出工具
+  - 將所有資料表匯出為 CSV 檔案
+  - 支援使用者資料、查詢記錄、瀏覽統計等
+  - 自動建立時間戳記的檔案名稱
 
 - **`clients/procurement_client.py`**：政府採購網客戶端
   - HTTP 請求處理
@@ -276,6 +282,47 @@ GET /
 ```
 
 返回系統狀態資訊。
+
+## 資料匯出工具
+
+專案提供 Supabase 資料匯出工具，可以將所有資料表匯出為 CSV 檔案：
+
+### 使用方法
+
+```bash
+# 匯出所有資料表為 CSV
+python export_supabase_data.py
+```
+
+### 匯出的資料表
+
+工具會自動匯出以下資料表和視圖：
+
+- **users**: 使用者基本資料
+- **user_query_logs**: 查詢記錄
+- **tender_views**: 標案瀏覽記錄
+- **user_browsing_state**: 瀏覽狀態
+- **user_activity_stats**: 活動統計
+- **daily_query_stats**: 每日查詢統計（視圖）
+- **user_activity_ranking**: 使用者活動排行（視圖）
+- **popular_tenders**: 熱門標案排行（視圖）
+
+### 輸出格式
+
+- 檔案位置：`exports/` 目錄
+- 檔案命名：`{table_name}_{timestamp}.csv`
+- 編碼：UTF-8 with BOM（支援 Excel 開啟）
+- 包含表頭：第一行為欄位名稱
+
+### 範例輸出
+
+```
+exports/
+├── users_20241118_143022.csv
+├── user_query_logs_20241118_143022.csv
+├── tender_views_20241118_143022.csv
+└── ...
+```
 
 ## 注意事項
 
