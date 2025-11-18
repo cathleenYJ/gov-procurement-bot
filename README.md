@@ -9,6 +9,8 @@
 - **分類查詢**：支援工程類、財物類、勞務類採購分類查詢
 - **Line Bot 整合**：支援即時聊天獲取採購資訊
 - **統計分析**：提供採購資料統計和趨勢分析
+- **資料匯出**：支援 Supabase 資料庫完整匯出為 CSV
+- **分頁查詢**：優化的「更多」按鈕，避免重複結果
 
 ## 技術架構
 
@@ -17,6 +19,49 @@
 - **資料庫**：Supabase (PostgreSQL)
 - **資料來源**：政府電子採購網 (https://web.pcc.gov.tw)
 - **部署方式**：支援本地開發和雲端部署（Render/Heroku）
+
+## 最新更新 (v2.0)
+
+### 🐛 問題修復
+
+#### 1. LINE Bot 分頁重複問題 ✅ 已修復
+- **問題**：點選「更多」按鈕時顯示重複的標案結果
+- **原因**：路由處理順序錯誤，"更多" 處理器被分類查詢覆蓋
+- **解決方案**：調整 `procurement_bot.py` 中的路由順序，將 "更多" 處理器移至分類查詢之前
+- **影響**：提升使用者體驗，避免重複內容
+
+#### 2. 部署配置清理 ✅ 已完成
+- **問題**：專案中殘留 Vercel 部署檔案，但實際使用 Render 部署
+- **原因**：專案從 Vercel 遷移至 Render，但未清理舊檔案
+- **解決方案**：刪除 `.vercel/` 目錄和 `api/` 目錄，更新 README 和 .gitignore
+- **影響**：專案結構更清晰，減少混亂
+
+### ✨ 新增功能
+
+#### 1. Supabase 資料匯出工具 📊
+- **功能**：自動匯出所有資料表為 CSV 檔案
+- **支援的資料表**：users, user_query_logs, tender_views, user_browsing_state, user_activity_stats 等
+- **檔案格式**：UTF-8 with BOM，支援 Excel 開啟
+- **使用方法**：`python export_supabase_data.py`
+
+#### 2. 優化分頁邏輯 🔄
+- **改進**：更好的分頁處理，避免重複標案
+- **快取管理**：支援清除使用者快取功能
+- **測試支援**：提供環境變數控制快取行為
+
+### 📊 技術改進
+
+- **資料處理**：優化的資料匯出和分析流程
+- **部署簡化**：清理不必要的部署檔案
+- **文件更新**：完整的 README 文檔更新
+
+### 🔧 開發工具增強
+
+- **快取控制**：環境變數 `DISABLE_MEMORY_CACHE` 和 `BYPASS_DB_BROWSING`
+- **快取清除**：LINE 聊天指令支援清除快取
+- **除錯支援**：更好的測試和除錯功能
+
+---
 
 ## 需求環境
 
@@ -195,13 +240,14 @@ search 資訊系統
 
 ```
 gov-procurement-crawler/
-├── procurement_bot.py               # 核心邏輯模塊
+├── procurement_bot.py               # 核心邏輯模塊（已修復分頁重複問題）
 ├── linebot_app.py                  # 本地開發入口
 ├── procurement_processors.py       # 採購資料處理器
-├── export_supabase_data.py         # Supabase 資料匯出工具
+├── export_supabase_data.py         # Supabase 資料匯出工具（新增）
 ├── container.py                    # 依賴注入容器
 ├── clients/
 │   └── procurement_client.py       # 政府採購網客戶端
+├── exports/                        # 匯出的 CSV 檔案（自動生成）
 ├── requirements.txt                # Python 依賴
 ├── .env.example                    # 環境變數範例
 ├── README.md                      # 專案說明
@@ -325,6 +371,12 @@ exports/
 ```
 
 ## 注意事項
+
+- 政府採購網可能有存取限制，建議適度使用
+- Line Bot 有訊息長度限制，長內容會被截斷
+- 建議定期檢查政府採購網頁面結構變化
+- 生產環境建議使用環境變數管理敏感信息
+- 大量查詢可能觸發網站防護機制
 
 - 政府採購網可能有存取限制，建議適度使用
 - Line Bot 有訊息長度限制，長內容會被截斷
