@@ -187,7 +187,15 @@ class ProcurementClient:
             tender_name = ""
             tender_url = ""
             if tender_link:
-                tender_name = tender_link.get_text(strip=True)
+                # 從 JavaScript 程式碼中提取標案名稱
+                script_tag = tender_cell.find('script')
+                if script_tag and 'pageCode2Img' in script_tag.get_text():
+                    script_text = script_tag.get_text()
+                    # 提取 pageCode2Img("標案名稱") 中的標案名稱
+                    match = re.search(r'pageCode2Img\("([^"]+)"\)', script_text)
+                    if match:
+                        tender_name = match.group(1)
+                
                 href = tender_link.get('href', '')
                 if href.startswith('/'):
                     tender_url = f"{self.base_url}{href}"
