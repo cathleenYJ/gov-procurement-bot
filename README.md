@@ -16,7 +16,7 @@
 - **資料擷取**：requests + BeautifulSoup (解析HTML)
 - **資料庫**：Supabase (PostgreSQL)
 - **資料來源**：政府電子採購網 (https://web.pcc.gov.tw)
-- **部署方式**：支援本地開發和雲端部署（Vercel/Heroku）
+- **部署方式**：支援本地開發和雲端部署（Render/Heroku）
 
 ## 需求環境
 
@@ -110,9 +110,14 @@ curl http://localhost:5000/test
 
 專案支援多種部署方式：
 
-#### Vercel 部署
-- 將 `api/index.py` 部署為 serverless function
-- Webhook URL 格式：`https://your-domain.vercel.app/api/index`
+#### Render（建議用於線上部署）
+
+Render 是一個簡單的雲端主機服務，適合此專案的持續運行 Web 服務。建議在 Render 上建立一個 Web Service，並使用 gunicorn 作為啟動命令：
+
+- Build Command: leave empty (或根據需求執行安裝依賴)
+- Start Command: gunicorn "procurement_bot:create_app()" -b 0.0.0.0:$PORT
+
+Render 會自動設定 `PORT` 環境變數；如果你使用 Plain Python 啟動，也可以使用 `python procurement_bot.py`。
 
 #### Heroku 部署
 ```bash
@@ -155,6 +160,25 @@ heroku config:set PORT=5000
 - 系統在查詢時會排除已查看的標案 ID；若分頁沒有新資料，會自動使用多日跨查詢以取得更多不重複資料；
 - 如果仍看到重複，可以確認是否使用了「更多」按鈕（訊息文字為「更多財物類」而非「財物類」），或嘗試晚一點再查詢（官方資料更新後會有新結果）。
 
+### 快取與分頁測試 (開發/除錯)
+
+系統會為每位使用者儲存瀏覽狀態 (user_browsing_state)，包含目前的 page 與已查看的標案 id。若要在開發或測試中關閉本地快取或避免 DB 的歷史 browsing state 影響結果，可以使用兩個環境變數：
+
+- DISABLE_MEMORY_CACHE=true：忽略本地記憶體快取的 seen ids，只使用 page 進行分頁，方便多進程或跨環境測試分頁行為。
+- BYPASS_DB_BROWSING=true：在取得瀏覽狀態時直接忽略 DB，僅使用記憶體快取，避免資料庫中舊的 browsing state 干擾測試。
+
+在測試時建議先暫時啟用上述變數，確認分頁與更多流程。記得重啟應用以套用新的環境變數。
+
+### 清除使用者快取
+
+為了在單一用戶測試時更方便，你可以在 LINE 聊天輸入以下任一指令以清除該使用者的快取並重設 page：
+
+- 清除快取
+- 重設分頁
+- clear cache
+
+清除後系統會將該使用者的 `user_browsing_state` (seen ids) 設為空並把 page 設為 1。
+
 #### 幫助指令：
 - **help/幫助**：顯示使用指南
 
@@ -177,8 +201,6 @@ gov-procurement-crawler/
 ├── container.py                    # 依賴注入容器
 ├── clients/
 │   └── procurement_client.py       # 政府採購網客戶端
-├── api/
-│   └── index.py                    # 生產部署入口
 ├── requirements.txt                # Python 依賴
 ├── .env.example                    # 環境變數範例
 ├── README.md                      # 專案說明

@@ -37,6 +37,26 @@ def init_supabase():
         logger.error(f"Failed to initialize Supabase client: {e}")
         raise
 
+
+def parse_more_category(message: str) -> str | None:
+    """
+    從使用者輸入中解析更多標案的類別字串。
+
+    Examples:
+        parse_more_category('更多工程類') -> '工程類'
+        parse_more_category('更多工程') -> '工程類'
+        parse_more_category('更多財物類') -> '財物類'
+    """
+    if not message:
+        return None
+    if '工程' in message:
+        return '工程類'
+    if '財物' in message:
+        return '財物類'
+    if '勞務' in message:
+        return '勞務類'
+    return None
+
 def save_user(supabase_client, user_id, company, contact_name, email):
     """儲存或更新使用者資料"""
     return supabase_client.save_user(user_id, company, contact_name, email)
@@ -72,6 +92,38 @@ def create_app():
         supabase_client = init_supabase()
         # 初始化行為分析模組
         analytics = UserAnalytics(supabase_client)
+
+        def handle_category_query(user_id: str, category: str, event) -> None:
+            """Helper: 查詢指定類別並回覆結果（含更新 cache 與 DB）。"""
+            tenders = procurement_processor.get_procurements_by_category(category, limit=10)
+
+            analytics.log_query(
+                line_user_id=user_id,
+                query_type=f"{category}查詢",
+                query_text=category,
+                category=category,
+                result_count=len(tenders)
+            )
+
+            if tenders:
+                analytics.log_tender_views_batch(user_id, tenders)
+                seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
+                user_tender_cache[user_id] = {"category": category, "seen_ids": seen_ids, "page": 1}
+                analytics.update_browsing_state(user_id, category, seen_ids, page=1)
+
+            quick_reply = QuickReply(items=[
+                QuickReplyButton(action=MessageAction(label=f"📋 更多{category}標案", text=f"更多{category}")),
+                QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
+            ])
+
+            response_text = procurement_processor.format_multiple_tenders(tenders, f"{category}採購")
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=response_text, quick_reply=quick_reply)
+            )
+    # NOTE: parse_more_category is defined at module level for testability (see below)
+    
         # 是否禁用本地記憶體快取（方便在開發或測試時避免快取造成的結果重複）
         DISABLE_MEMORY_CACHE = os.getenv('DISABLE_MEMORY_CACHE', 'false').lower() in ('true', '1', 'yes')
         # 是否完全跳過 DB 的 browsing state（在測試時可避免數據庫的歷史 state 影響結果）
@@ -456,143 +508,17 @@ def create_app():
 
             elif "工程類" in user_message or user_message_lower in ["工程", "1", "1."]:
                 # 工程類採購
-                category = "工程類"
-                tenders = procurement_processor.get_procurements_by_category(
-                    category, limit=10
-                )
-                
-                # 記錄查詢行為
-                analytics.log_query(
-                    line_user_id=user_id,
-                    query_type="工程類查詢",
-                    query_text=user_message,
-                    category=category,
-                    result_count=len(tenders)
-                )
-                
-                # 記錄標案瀏覽
-                if tenders:
-                    analytics.log_tender_views_batch(user_id, tenders)
-                    
-                    # 儲存已查看的標案ID（記憶體快取），並記錄目前頁數（page）
-                    seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
-                    user_tender_cache[user_id] = {
-                        "category": category,
-                        "seen_ids": seen_ids,
-                        "page": 1
-                    }
-                    
-                    # 同時更新資料庫的瀏覽狀態
-                    analytics.update_browsing_state(user_id, category, seen_ids, page=1)
-                
-                # 加入「更多標案」按鈕
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="📋 更多工程類標案", text="更多工程類")),
-                    QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
-                ])
-                
-                response_text = procurement_processor.format_multiple_tenders(
-                    tenders, "工程類採購"
-                )
-                
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=response_text, quick_reply=quick_reply)
-                )
+                handle_category_query(user_id, "工程類", event)
                 return
                 
             elif "財物類" in user_message or user_message_lower in ["財物", "2", "2."]:
                 # 財物類採購
-                category = "財物類"
-                tenders = procurement_processor.get_procurements_by_category(
-                    category, limit=10
-                )
-                
-                # 記錄查詢行為
-                analytics.log_query(
-                    line_user_id=user_id,
-                    query_type="財物類查詢",
-                    query_text=user_message,
-                    category=category,
-                    result_count=len(tenders)
-                )
-                
-                # 記錄標案瀏覽
-                if tenders:
-                    analytics.log_tender_views_batch(user_id, tenders)
-                    
-                    # 儲存已查看的標案ID，並記錄 page
-                    seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
-                    user_tender_cache[user_id] = {
-                        "category": category,
-                        "seen_ids": seen_ids,
-                        "page": 1
-                    }
-                    
-                    # 更新資料庫的瀏覽狀態
-                    analytics.update_browsing_state(user_id, category, seen_ids, page=1)
-                
-                # 加入「更多標案」按鈕
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="📋 更多財物類標案", text="更多財物類")),
-                    QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
-                ])
-                
-                response_text = procurement_processor.format_multiple_tenders(
-                    tenders, "財物類採購"
-                )
-                
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=response_text, quick_reply=quick_reply)
-                )
+                handle_category_query(user_id, "財物類", event)
                 return
                 
             elif "勞務類" in user_message or user_message_lower in ["勞務", "3", "3."]:
                 # 勞務類採購
-                category = "勞務類"
-                tenders = procurement_processor.get_procurements_by_category(
-                    category, limit=10
-                )
-                
-                # 記錄查詢行為
-                analytics.log_query(
-                    line_user_id=user_id,
-                    query_type="勞務類查詢",
-                    query_text=user_message,
-                    category=category,
-                    result_count=len(tenders)
-                )
-                
-                # 記錄標案瀏覽
-                if tenders:
-                    analytics.log_tender_views_batch(user_id, tenders)
-                    
-                    # 儲存已查看的標案ID，並記錄 page
-                    seen_ids = [t.get('tender_id', '') or t.get('tender_name', '') for t in tenders]
-                    user_tender_cache[user_id] = {
-                        "category": category,
-                        "seen_ids": seen_ids,
-                        "page": 1
-                    }
-                    
-                    # 更新資料庫的瀏覽狀態
-                    analytics.update_browsing_state(user_id, category, seen_ids, page=1)
-                
-                # 加入「更多標案」按鈕
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="📋 更多勞務類標案", text="更多勞務類")),
-                    QuickReplyButton(action=MessageAction(label="🔍 其他分類", text="標案查詢"))
-                ])
-                
-                response_text = procurement_processor.format_multiple_tenders(
-                    tenders, "勞務類採購"
-                )
-                
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=response_text, quick_reply=quick_reply)
-                )
+                handle_category_query(user_id, "勞務類", event)
                 return
             
             # === 處理「更多標案」請求 ===
