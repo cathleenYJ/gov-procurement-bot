@@ -155,9 +155,9 @@ def create_app():
                 # 已登錄過的使用者（重新加入）
                 quick_reply = QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
-                    QuickReplyButton(action=MessageAction(label="👤 建立個人資料", text="建立個人資料")),
-                    QuickReplyButton(action=MessageAction(label="❓ 如何使用", text="如何使用")),
-                    QuickReplyButton(action=MessageAction(label="💼 我們提供什麼服務", text="我們提供什麼服務"))
+                    QuickReplyButton(action=MessageAction(label="👤 建立公司檔案", text="建立公司檔案")),
+                    QuickReplyButton(action=MessageAction(label="❓ 如何查詢標案", text="如何查詢標案")),
+                    QuickReplyButton(action=MessageAction(label="💼 我們提供的服務", text="我們提供的服務"))
                 ])
                 
                 welcome_message = f"""歡迎回來，{user_data['contact_name']}！
@@ -282,7 +282,7 @@ def create_app():
                 )
                 return
                 
-            elif user_message_lower in ["我的資料", "查看資料", "建立個人資料"] or user_message == "建立個人資料":
+            elif user_message_lower in ["我的資料", "查看資料", "建立公司檔案"] or user_message == "建立公司檔案":
                 user_data = get_user(supabase_client, user_id)
                 if user_data:
                     # 已有資料，顯示並詢問是否修改
@@ -700,8 +700,8 @@ def create_app():
                     )
                 return
             
-            elif user_message_lower in ["如何使用"]:
-                response_text = """📝 如何使用我們的服務
+            elif user_message_lower in ["如何查詢標案"]:
+                response_text = """📝 如何查詢標案
 
 為了在未來得到更好的呈現，請填寫正確的資訊 for 客戶檔案建立：
 
@@ -710,15 +710,15 @@ def create_app():
 👤 名字
 💼 職務職位
 
-請點擊「建立個人資料」按鈕開始填寫您的資訊！"""
+請點擊「建立公司檔案」按鈕開始填寫您的資訊！"""
                 line_bot_api.reply_message(
                     event.reply_token,
                     TextSendMessage(text=response_text)
                 )
                 return
                 
-            elif user_message_lower in ["我們提供什麼服務"]:
-                response_text = """💼 我們提供什麼服務
+            elif user_message_lower in ["我們提供的服務"]:
+                response_text = """💼 我們提供的服務
 
 我們整合台灣招標網站的內容，提供以下服務：
 
@@ -809,9 +809,9 @@ def create_app():
                     # 已登錄使用者的歡迎訊息
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
-                        QuickReplyButton(action=MessageAction(label="👤 建立個人資料", text="建立個人資料")),
-                        QuickReplyButton(action=MessageAction(label="❓ 如何使用", text="如何使用")),
-                        QuickReplyButton(action=MessageAction(label="💼 我們提供什麼服務", text="我們提供什麼服務"))
+                        QuickReplyButton(action=MessageAction(label="👤 建立公司檔案", text="建立公司檔案")),
+                        QuickReplyButton(action=MessageAction(label="❓ 如何查詢標案", text="如何查詢標案")),
+                        QuickReplyButton(action=MessageAction(label="💼 我們提供的服務", text="我們提供的服務"))
                     ])
                     
                     response_text = f"""歡迎回來，{user_data['contact_name']}！
