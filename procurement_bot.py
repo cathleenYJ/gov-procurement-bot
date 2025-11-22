@@ -155,8 +155,9 @@ def create_app():
                 # 已登錄過的使用者（重新加入）
                 quick_reply = QuickReply(items=[
                     QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
-                    QuickReplyButton(action=MessageAction(label="👤 我的資料", text="我的資料")),
-                    QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
+                    QuickReplyButton(action=MessageAction(label="👤 建立個人資料", text="建立個人資料")),
+                    QuickReplyButton(action=MessageAction(label="❓ 如何使用", text="如何使用")),
+                    QuickReplyButton(action=MessageAction(label="💼 我們提供什麼服務", text="我們提供什麼服務"))
                 ])
                 
                 welcome_message = f"""歡迎回來，{user_data['contact_name']}！
@@ -698,8 +699,55 @@ def create_app():
                         TextSendMessage(text=response_text)
                     )
                 return
+            
+            elif user_message_lower in ["如何使用"]:
+                response_text = """📝 如何使用我們的服務
+
+為了在未來得到更好的呈現，請填寫正確的資訊 for 客戶檔案建立：
+
+🏢 公司名稱
+📧 Email
+👤 名字
+💼 職務職位
+
+請點擊「建立個人資料」按鈕開始填寫您的資訊！"""
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text)
+                )
+                return
                 
-            elif user_message_lower in ["help", "幫助", "指令", "?"]:
+            elif user_message_lower in ["我們提供什麼服務"]:
+                response_text = """💼 我們提供什麼服務
+
+我們整合台灣招標網站的內容，提供以下服務：
+
+🏗️ 工程類：
+• 建築工程
+• 道路工程  
+• 水利工程
+
+🛒 購案類：
+• 設備採購
+• 軟體採購
+• 儀器採購
+
+👥 勞務採購：
+• 顧問服務
+• 研究服務
+• 外包服務
+
+📢 公告招標：
+• 即時標案資訊
+• 詳細標案內容
+• 機關聯絡資訊
+
+讓我們幫您快速找到最適合的政府採購機會！"""
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=response_text)
+                )
+                return
                 # 幫助訊息
                 response_text = """
 🤖 政府採購機器人使用指南
@@ -761,8 +809,9 @@ def create_app():
                     # 已登錄使用者的歡迎訊息
                     quick_reply = QuickReply(items=[
                         QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
-                        QuickReplyButton(action=MessageAction(label="👤 我的資料", text="我的資料")),
-                        QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
+                        QuickReplyButton(action=MessageAction(label="👤 建立個人資料", text="建立個人資料")),
+                        QuickReplyButton(action=MessageAction(label="❓ 如何使用", text="如何使用")),
+                        QuickReplyButton(action=MessageAction(label="💼 我們提供什麼服務", text="我們提供什麼服務"))
                     ])
                     
                     response_text = f"""歡迎回來，{user_data['contact_name']}！
