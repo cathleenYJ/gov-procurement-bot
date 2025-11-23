@@ -9,7 +9,7 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
     MessageEvent, TextMessage, TextSendMessage,
     QuickReply, QuickReplyButton, MessageAction,
-    FollowEvent
+    FollowEvent, PostbackEvent, ButtonsTemplate, PostbackAction, TemplateSendMessage
 )
 from dotenv import load_dotenv
 import os
@@ -204,6 +204,40 @@ def create_app():
                 TextSendMessage(text="歡迎使用 Eazy Procurement Bot！輸入任何訊息開始使用。")
             )
 
+    @handler.add(PostbackEvent)
+    def handle_postback(event):
+        """處理 Postback 事件"""
+        user_id = event.source.user_id
+        data = event.postback.data
+        
+        try:
+            if data == "modify_company":
+                user_states[user_id] = {"state": "modify_company", "data": {}}
+                response_text = "請輸入新的公司名稱："
+            elif data == "modify_contact":
+                user_states[user_id] = {"state": "modify_contact", "data": {}}
+                response_text = "請輸入新的聯絡人姓名："
+            elif data == "modify_email":
+                user_states[user_id] = {"state": "modify_email", "data": {}}
+                response_text = "請輸入新的 Email："
+            elif data == "modify_position":
+                user_states[user_id] = {"state": "modify_position", "data": {}}
+                response_text = "請輸入新的職務/職位："
+            else:
+                response_text = "無效的操作。"
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=response_text)
+            )
+            
+        except Exception as e:
+            logger.error(f"Error handling postback: {e}")
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="系統忙碌中，請稍後再試。")
+            )
+
     @handler.add(MessageEvent, message=TextMessage)
     def handle_message(event):
         user_message = event.message.text.strip()
@@ -252,6 +286,46 @@ def create_app():
                     # 清除狀態
                     del user_states[user_id]
                     
+                elif state == "modify_company":
+                    user_data = get_user(supabase_client, user_id)
+                    if user_data:
+                        user_data["company"] = user_message
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        response_text = "✅ 公司名稱已更新！"
+                    else:
+                        response_text = "資料錯誤，請重新開始。"
+                    del user_states[user_id]
+                    
+                elif state == "modify_contact":
+                    user_data = get_user(supabase_client, user_id)
+                    if user_data:
+                        user_data["contact_name"] = user_message
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        response_text = "✅ 聯絡人已更新！"
+                    else:
+                        response_text = "資料錯誤，請重新開始。"
+                    del user_states[user_id]
+                    
+                elif state == "modify_email":
+                    user_data = get_user(supabase_client, user_id)
+                    if user_data:
+                        user_data["email"] = user_message
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        response_text = "✅ Email 已更新！"
+                    else:
+                        response_text = "資料錯誤，請重新開始。"
+                    del user_states[user_id]
+                    
+                elif state == "modify_position":
+                    user_data = get_user(supabase_client, user_id)
+                    if user_data:
+                        user_data["position"] = user_message
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        response_text = "✅ 職務/職位已更新！"
+                    else:
+                        response_text = "資料錯誤，請重新開始。"
+                    del user_states[user_id]
+                    
                 else:
                     response_text = "請輸入「開始登錄」以重新開始。"
                     del user_states[user_id]
@@ -275,14 +349,26 @@ def create_app():
             elif user_message_lower in ["修改資料", "更新資料"]:
                 user_data = get_user(supabase_client, user_id)
                 if user_data:
-                    response_text = f"""請輸入新的公司名稱："""
-                    user_states[user_id] = {"state": "ask_company", "data": {}}
+                    buttons_template = ButtonsTemplate(
+                        title="修改個人資料",
+                        text="請選擇要修改的項目：",
+                        actions=[
+                            PostbackAction(label="公司名稱", data="modify_company"),
+                            PostbackAction(label="聯絡人", data="modify_contact"),
+                            PostbackAction(label="Email", data="modify_email"),
+                            PostbackAction(label="職務/職位", data="modify_position")
+                        ]
+                    )
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TemplateSendMessage(alt_text="請選擇要修改的項目", template=buttons_template)
+                    )
                 else:
                     response_text = "您尚未登錄資料，請輸入「開始登錄」進行登錄。"
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text=response_text)
-                )
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=response_text)
+                    )
                 return
                 
             elif user_message_lower in ["我的資料", "查看資料", "建立公司檔案"] or user_message == "建立公司檔案":
