@@ -31,7 +31,7 @@ class SupabaseClient:
         self.client: Client = create_client(supabase_url, supabase_key)
         logger.info("Supabase client initialized successfully")
     
-    def save_user(self, line_user_id: str, company: str, contact_name: str, email: str, position: str) -> bool:
+    def save_user(self, line_user_id: str, company: str, contact_name: str, email: str, position: str, industry: str) -> bool:
         """
         儲存或更新使用者資料
         
@@ -41,6 +41,7 @@ class SupabaseClient:
             contact_name: 聯絡人姓名
             email: 電子郵件
             position: 職務/職位
+            industry: 產業類別
             
         Returns:
             bool: 是否儲存成功
@@ -52,6 +53,7 @@ class SupabaseClient:
                 "contact_name": contact_name,
                 "email": email,
                 "position": position,
+                "industry": industry,
                 "updated_at": datetime.utcnow().isoformat()
             }
             
@@ -77,7 +79,7 @@ class SupabaseClient:
         """
         try:
             response = self.client.table("users").select(
-                "company, contact_name, email, position"
+                "company, contact_name, email, position, industry"
             ).eq("line_user_id", line_user_id).execute()
             
             if response.data and len(response.data) > 0:
@@ -87,7 +89,8 @@ class SupabaseClient:
                     'company': user_data['company'],
                     'contact_name': user_data['contact_name'],
                     'email': user_data['email'],
-                    'position': user_data['position']
+                    'position': user_data['position'],
+                    'industry': user_data['industry']
                 }
             
             logger.info(f"No user data found for: {line_user_id}")
@@ -106,7 +109,7 @@ class SupabaseClient:
         """
         try:
             response = self.client.table("users").select(
-                "line_user_id, company, contact_name, email, position, created_at, updated_at"
+                "line_user_id, company, contact_name, email, position, industry, created_at, updated_at"
             ).order("created_at", desc=True).execute()
             
             if response.data:

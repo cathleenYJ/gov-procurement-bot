@@ -164,11 +164,10 @@ def create_app():
 
 🏢 {user_data['company']}
 💼 {user_data['position']}
+🏭 {user_data['industry']}
 
 很高興再次為您服務！
-您可以直接開始查詢政府採購標案。
-
-點擊下方按鈕快速開始 👇"""
+您可以直接開始查詢政府採購標案。"""
             else:
                 # 新使用者 - 只顯示開始登錄按鈕
                 quick_reply = QuickReply(items=[
@@ -223,6 +222,18 @@ def create_app():
             elif data == "modify_position":
                 user_states[user_id] = {"state": "modify_position", "data": {}}
                 response_text = "請輸入新的職務/職位："
+            elif data == "modify_industry":
+                user_states[user_id] = {"state": "modify_industry", "data": {}}
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
+                    QuickReplyButton(action=MessageAction(label="財物類", text="財物類")),
+                    QuickReplyButton(action=MessageAction(label="勞務類", text="勞務類"))
+                ])
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="請選擇新的產業類別：", quick_reply=quick_reply)
+                )
+                return
             else:
                 response_text = "無效的操作。"
             
@@ -269,28 +280,62 @@ def create_app():
                     data = user_states[user_id]["data"]
                     data["position"] = user_message
                     
-                    # 儲存到資料庫
-                    if save_user(supabase_client, user_id, data["company"], data["contact_name"], data["email"], data["position"]):
-                        response_text = f"""✅ 登錄完成！
+                    # 設置下一個狀態為選擇產業類別
+                    user_states[user_id]["state"] = "ask_industry"
+                    quick_reply = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
+                        QuickReplyButton(action=MessageAction(label="財物類", text="財物類")),
+                        QuickReplyButton(action=MessageAction(label="勞務類", text="勞務類"))
+                    ])
+                    response_text = "請選擇您的產業類別："
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=response_text, quick_reply=quick_reply)
+                    )
+                    return
+                    
+                elif state == "ask_industry":
+                    valid_industries = ["工程類", "財物類", "勞務類"]
+                    if user_message in valid_industries:
+                        data = user_states[user_id]["data"]
+                        data["industry"] = user_message
+                        
+                        # 儲存到資料庫
+                        if save_user(supabase_client, user_id, data["company"], data["contact_name"], data["email"], data["position"], data["industry"]):
+                            response_text = f"""✅ 登錄完成！
 
 • 公司：{data['company']}
 • 聯絡人：{data['contact_name']}
 • Email：{data['email']}
 • 職務/職位：{data['position']}
+• 產業類別：{data['industry']}
 
 現在您可以開始查詢政府採購資訊了！
 輸入「標案查詢」或點擊圖文選單按鈕開始。"""
+                        else:
+                            response_text = "❌ 登錄失敗，請稍後再試。"
+                        
+                        # 清除狀態
+                        del user_states[user_id]
                     else:
-                        response_text = "❌ 登錄失敗，請稍後再試。"
-                    
-                    # 清除狀態
-                    del user_states[user_id]
+                        # 無效選擇，重新發送選項
+                        quick_reply = QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
+                            QuickReplyButton(action=MessageAction(label="財物類", text="財物類")),
+                            QuickReplyButton(action=MessageAction(label="勞務類", text="勞務類"))
+                        ])
+                        response_text = "請選擇有效的產業類別："
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=response_text, quick_reply=quick_reply)
+                        )
+                        return
                     
                 elif state == "modify_company":
                     user_data = get_user(supabase_client, user_id)
                     if user_data:
                         user_data["company"] = user_message
-                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"], user_data["industry"])
                         response_text = "✅ 公司名稱已更新！"
                     else:
                         response_text = "資料錯誤，請重新開始。"
@@ -300,7 +345,7 @@ def create_app():
                     user_data = get_user(supabase_client, user_id)
                     if user_data:
                         user_data["contact_name"] = user_message
-                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"], user_data["industry"])
                         response_text = "✅ 聯絡人已更新！"
                     else:
                         response_text = "資料錯誤，請重新開始。"
@@ -310,7 +355,7 @@ def create_app():
                     user_data = get_user(supabase_client, user_id)
                     if user_data:
                         user_data["email"] = user_message
-                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"], user_data["industry"])
                         response_text = "✅ Email 已更新！"
                     else:
                         response_text = "資料錯誤，請重新開始。"
@@ -320,11 +365,35 @@ def create_app():
                     user_data = get_user(supabase_client, user_id)
                     if user_data:
                         user_data["position"] = user_message
-                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"])
+                        save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"], user_data["industry"])
                         response_text = "✅ 職務/職位已更新！"
                     else:
                         response_text = "資料錯誤，請重新開始。"
                     del user_states[user_id]
+                    
+                elif state == "modify_industry":
+                    valid_industries = ["工程類", "財物類", "勞務類"]
+                    if user_message in valid_industries:
+                        user_data = get_user(supabase_client, user_id)
+                        if user_data:
+                            user_data["industry"] = user_message
+                            save_user(supabase_client, user_id, user_data["company"], user_data["contact_name"], user_data["email"], user_data["position"], user_data["industry"])
+                            response_text = "✅ 產業類別已更新！"
+                        else:
+                            response_text = "資料錯誤，請重新開始。"
+                        del user_states[user_id]
+                    else:
+                        # 無效選擇，重新發送選項
+                        quick_reply = QuickReply(items=[
+                            QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
+                            QuickReplyButton(action=MessageAction(label="財物類", text="財物類")),
+                            QuickReplyButton(action=MessageAction(label="勞務類", text="勞務類"))
+                        ])
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text="請選擇有效的產業類別：", quick_reply=quick_reply)
+                        )
+                        return
                     
                 else:
                     response_text = "請輸入「開始登錄」以重新開始。"
@@ -356,7 +425,8 @@ def create_app():
                             PostbackAction(label="公司名稱", data="modify_company"),
                             PostbackAction(label="聯絡人", data="modify_contact"),
                             PostbackAction(label="Email", data="modify_email"),
-                            PostbackAction(label="職務/職位", data="modify_position")
+                            PostbackAction(label="職務/職位", data="modify_position"),
+                            PostbackAction(label="產業類別", data="modify_industry")
                         ]
                     )
                     line_bot_api.reply_message(
@@ -386,6 +456,7 @@ def create_app():
 • 聯絡人：{user_data['contact_name']}
 • Email：{user_data['email']}
 • 職務/職位：{user_data['position']}
+• 產業類別：{user_data['industry']}
 
 是否需要修改資料？"""
                     
@@ -908,6 +979,7 @@ def create_app():
 
 🏢 {user_data['company']}
 💼 {user_data['position']}
+🏭 {user_data['industry']}
 
 📋 快速開始：
 點擊下方按鈕開始查詢標案"""
