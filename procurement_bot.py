@@ -275,7 +275,7 @@ def create_app():
             elif user_message_lower in ["修改資料", "更新資料"]:
                 user_data = get_user(supabase_client, user_id)
                 if user_data:
-                    response_text = f"""請輸入新的公司名稱"""
+                    response_text = f"""請輸入新的公司名稱："""
                     user_states[user_id] = {"state": "ask_company", "data": {}}
                 else:
                     response_text = "您尚未登錄資料，請輸入「開始登錄」進行登錄。"
