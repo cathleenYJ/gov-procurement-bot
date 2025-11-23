@@ -218,18 +218,18 @@ def create_app():
                 if state == "ask_company":
                     user_states[user_id]["data"]["company"] = user_message
                     user_states[user_id]["state"] = "ask_contact"
-                    response_text = "請輸入聯絡人姓名："
+                    response_text = "請輸入新的聯絡人姓名："
                     
                 elif state == "ask_contact":
                     user_states[user_id]["data"]["contact_name"] = user_message
                     user_states[user_id]["state"] = "ask_email"
-                    response_text = "請輸入聯絡人 Email："
+                    response_text = "請輸入新的聯絡人 Email："
                     
                 elif state == "ask_email":
                     data = user_states[user_id]["data"]
                     data["email"] = user_message
                     user_states[user_id]["state"] = "ask_position"
-                    response_text = "請輸入您的職務/職位："
+                    response_text = "請輸入新的職務/職位："
                     
                 elif state == "ask_position":
                     data = user_states[user_id]["data"]
@@ -239,10 +239,10 @@ def create_app():
                     if save_user(supabase_client, user_id, data["company"], data["contact_name"], data["email"], data["position"]):
                         response_text = f"""✅ 登錄完成！
 
-🏢 公司：{data['company']}
-👤 聯絡人：{data['contact_name']}
-📧 Email：{data['email']}
-💼 職務：{data['position']}
+• 公司：{data['company']}
+• 聯絡人：{data['contact_name']}
+• Email：{data['email']}
+• 職務/職位：{data['position']}
 
 現在您可以開始查詢政府採購資訊了！
 輸入「標案查詢」或點擊圖文選單按鈕開始。"""
@@ -280,9 +280,9 @@ def create_app():
 • 公司：{user_data['company']}
 • 聯絡人：{user_data['contact_name']}
 • Email：{user_data['email']}
-• 職務：{user_data['position']}
+• 職務/職位：{user_data['position']}
 
-請輸入新的公司名稱位"""
+請輸入新的公司名稱"""
                     user_states[user_id] = {"state": "ask_company", "data": {}}
                 else:
                     response_text = "您尚未登錄資料，請輸入「開始登錄」進行登錄。"
@@ -303,10 +303,10 @@ def create_app():
                     
                     response_text = f"""您的登錄資料：
 
-🏢 公司：{user_data['company']}
-👤 聯絡人：{user_data['contact_name']}
-📧 Email：{user_data['email']}
-💼 職務：{user_data['position']}
+• 公司：{user_data['company']}
+• 聯絡人：{user_data['contact_name']}
+• Email：{user_data['email']}
+• 職務/職位：{user_data['position']}
 
 是否需要修改資料？"""
                     
