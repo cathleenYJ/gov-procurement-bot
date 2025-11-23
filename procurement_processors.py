@@ -402,31 +402,34 @@ class ProcurementProcessor:
         result = [f"📊 {title} (共{len(tenders)}筆){search_date_info}\n"]
         
         for i, tender in enumerate(tenders, 1):
-            tender_info = f"{i}. {tender.get('tender_name', 'N/A')[:30]}"
-            if len(tender.get('tender_name', '')) > 30:
-                tender_info += "..."
-            
-            # 添加重要資訊
+            # 格式化金額
             budget_amount = tender.get('budget_amount', 0)
             if budget_amount > 0:
                 if budget_amount >= 100000000:
-                    budget_str = f" ({budget_amount / 100000000:.1f}億)"
+                    budget_str = f"{budget_amount / 100000000:.1f}億"
                 elif budget_amount >= 10000:
-                    budget_str = f" ({budget_amount / 10000:.0f}萬)"
+                    budget_str = f"{budget_amount / 10000:.0f}萬"
                 else:
-                    budget_str = f" ({budget_amount:,})"
-                tender_info += budget_str
+                    budget_str = f"{budget_amount:,}"
+            else:
+                budget_str = tender.get('budget_text', '未公告')
             
-            # 添加機關名稱
-            org_name = tender.get('org_name', '')
-            if org_name:
-                tender_info += f" - {org_name[:15]}"
-                if len(org_name) > 15:
-                    tender_info += "..."
+            # 機關名稱
+            org_name = tender.get('org_name', 'N/A')
             
-            # 添加連結
+            # 第一行：【機關名稱，金額】
+            tender_info = f"{i}. 【 {org_name}， {budget_str} 】"
+            
+            # 第二行：標案名稱
+            tender_name = tender.get('tender_name', 'N/A')
+            tender_info += f"\n{tender_name}"
+            
+            # 第三行：連結
             if tender.get('tender_url'):
                 tender_info += f"\n🔗 {tender['tender_url']}"
+            
+            # 在每個標案後面加一個空行
+            tender_info += "\n"
             
             result.append(tender_info)
         

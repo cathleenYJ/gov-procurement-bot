@@ -1,5 +1,5 @@
 """
-政府採購機器人主程式
+Eazy Procurement Bot 主程式
 負責處理Line Bot與政府採購資料的互動
 """
 
@@ -57,9 +57,9 @@ def parse_more_category(message: str) -> str | None:
         return '勞務類'
     return None
 
-def save_user(supabase_client, user_id, company, contact_name, email):
+def save_user(supabase_client, user_id, company, contact_name, email, position):
     """儲存或更新使用者資料"""
-    return supabase_client.save_user(user_id, company, contact_name, email)
+    return supabase_client.save_user(user_id, company, contact_name, email, position)
 
 def get_user(supabase_client, user_id):
     """取得使用者資料"""
@@ -154,15 +154,16 @@ def create_app():
             if user_data:
                 # 已登錄過的使用者（重新加入）
                 quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
-                    QuickReplyButton(action=MessageAction(label="👤 建立公司檔案", text="建立公司檔案")),
-                    QuickReplyButton(action=MessageAction(label="❓ 如何查詢標案", text="如何查詢標案")),
-                    QuickReplyButton(action=MessageAction(label="💼 我們提供的服務", text="我們提供的服務"))
+                    QuickReplyButton(action=MessageAction(label="標案查詢", text="標案查詢")),
+                    QuickReplyButton(action=MessageAction(label="建立公司檔案", text="建立公司檔案")),
+                    QuickReplyButton(action=MessageAction(label="如何查詢標案", text="如何查詢標案")),
+                    QuickReplyButton(action=MessageAction(label="我們提供的服務", text="我們提供的服務"))
                 ])
                 
                 welcome_message = f"""歡迎回來，{user_data['contact_name']}！
 
 🏢 {user_data['company']}
+💼 {user_data['position']}
 
 很高興再次為您服務！
 您可以直接開始查詢政府採購標案。
@@ -174,7 +175,7 @@ def create_app():
                     QuickReplyButton(action=MessageAction(label="✍️ 開始登錄", text="開始登錄"))
                 ])
                 
-                welcome_message = """👋 歡迎使用政府採購機器人！
+                welcome_message = """👋 歡迎使用 Eazy Procurement Bot！
 
 🤖 我可以幫您：
 • 即時查詢政府採購標案
@@ -182,9 +183,10 @@ def create_app():
 • 快速瀏覽標案資訊
 
 📝 開始使用前，請先登錄您的公司資料：
-• 公司名稱
-• 聯絡人姓名
+• 公司
+• 聯絡人
 • Email
+• 職務/職位
 
 ✨ 點擊下方「開始登錄」即可開始！"""
             
@@ -199,7 +201,7 @@ def create_app():
             logger.error(f"Error handling follow event: {e}")
             line_bot_api.reply_message(
                 event.reply_token,
-                TextSendMessage(text="歡迎使用政府採購機器人！輸入任何訊息開始使用。")
+                TextSendMessage(text="歡迎使用 Eazy Procurement Bot！輸入任何訊息開始使用。")
             )
 
     @handler.add(MessageEvent, message=TextMessage)
@@ -226,14 +228,21 @@ def create_app():
                 elif state == "ask_email":
                     data = user_states[user_id]["data"]
                     data["email"] = user_message
+                    user_states[user_id]["state"] = "ask_position"
+                    response_text = "請輸入您的職務/職位："
+                    
+                elif state == "ask_position":
+                    data = user_states[user_id]["data"]
+                    data["position"] = user_message
                     
                     # 儲存到資料庫
-                    if save_user(supabase_client, user_id, data["company"], data["contact_name"], data["email"]):
+                    if save_user(supabase_client, user_id, data["company"], data["contact_name"], data["email"], data["position"]):
                         response_text = f"""✅ 登錄完成！
 
 🏢 公司：{data['company']}
 👤 聯絡人：{data['contact_name']}
 📧 Email：{data['email']}
+💼 職務：{data['position']}
 
 現在您可以開始查詢政府採購資訊了！
 輸入「標案查詢」或點擊圖文選單按鈕開始。"""
@@ -256,7 +265,7 @@ def create_app():
             # === 使用者資料管理指令 ===
             if user_message_lower in ["開始登錄", "註冊", "登錄"]:
                 user_states[user_id] = {"state": "ask_company", "data": {}}
-                response_text = "歡迎使用政府採購機器人！\n\n請輸入您的公司名稱："
+                response_text = "歡迎使用 Eazy Procurement Bot！\n\n請輸入您的公司名稱："
                 line_bot_api.reply_message(
                     event.reply_token,
                     TextSendMessage(text=response_text)
@@ -268,11 +277,16 @@ def create_app():
                 if user_data:
                     response_text = f"""目前登錄資料：
 
-🏢 公司：{user_data['company']}
-👤 聯絡人：{user_data['contact_name']}
-📧 Email：{user_data['email']}
+• 公司：{user_data['company']}
+• 聯絡人：{user_data['contact_name']}
+• Email：{user_data['email']}
+• 職務：{user_data['position']}
 
-請輸入新的公司名稱（開始重新登錄）："""
+請輸入新的公司名稱（開始重新登錄）：
+• 公司
+• 聯絡人
+• Email
+• 職務/職位"""
                     user_states[user_id] = {"state": "ask_company", "data": {}}
                 else:
                     response_text = "您尚未登錄資料，請輸入「開始登錄」進行登錄。"
@@ -296,6 +310,7 @@ def create_app():
 🏢 公司：{user_data['company']}
 👤 聯絡人：{user_data['contact_name']}
 📧 Email：{user_data['email']}
+💼 職務：{user_data['position']}
 
 是否需要修改資料？"""
                     
@@ -306,7 +321,7 @@ def create_app():
                 else:
                     # 沒有資料，直接開始登錄流程
                     user_states[user_id] = {"state": "ask_company", "data": {}}
-                    response_text = "歡迎使用政府採購機器人！\n您尚未登錄資料。\n\n請輸入您的公司名稱："
+                    response_text = "歡迎使用 Eazy Procurement Bot！\n您尚未登錄資料。\n\n請輸入您的公司名稱："
                     line_bot_api.reply_message(
                         event.reply_token,
                         TextSendMessage(text=response_text)
@@ -705,10 +720,10 @@ def create_app():
 
 為了在未來得到更好的呈現，請填寫正確的資訊 for 客戶檔案建立：
 
-🏢 公司名稱
-📧 Email
-👤 名字
-💼 職務職位
+• 公司
+• 聯絡人
+• Email
+• 職務/職位
 
 請點擊「建立公司檔案」按鈕開始填寫您的資訊！"""
                 line_bot_api.reply_message(
@@ -718,7 +733,7 @@ def create_app():
                 return
                 
             elif user_message_lower in ["我們提供的服務"]:
-                response_text = """💼 我們提供的服務
+                response_text = """我們提供的服務
 
 我們整合台灣招標網站的內容，提供以下服務：
 
@@ -750,7 +765,7 @@ def create_app():
                 return
                 # 幫助訊息
                 response_text = """
-🤖 政府採購機器人使用指南
+🤖 Eazy Procurement Bot 使用指南
 
 👤 使用者資料管理：
 • 開始登錄 - 登錄公司資料（首次使用）
@@ -808,20 +823,19 @@ def create_app():
                 if user_data:
                     # 已登錄使用者的歡迎訊息
                     quick_reply = QuickReply(items=[
-                        QuickReplyButton(action=MessageAction(label="📋 標案查詢", text="標案查詢")),
-                        QuickReplyButton(action=MessageAction(label="👤 建立公司檔案", text="建立公司檔案")),
-                        QuickReplyButton(action=MessageAction(label="❓ 如何查詢標案", text="如何查詢標案")),
-                        QuickReplyButton(action=MessageAction(label="💼 我們提供的服務", text="我們提供的服務"))
+                        QuickReplyButton(action=MessageAction(label="標案查詢", text="標案查詢")),
+                        QuickReplyButton(action=MessageAction(label="建立公司檔案", text="建立公司檔案")),
+                        QuickReplyButton(action=MessageAction(label="如何查詢標案", text="如何查詢標案")),
+                        QuickReplyButton(action=MessageAction(label="我們提供的服務", text="我們提供的服務"))
                     ])
                     
                     response_text = f"""歡迎回來，{user_data['contact_name']}！
 
 🏢 {user_data['company']}
+💼 {user_data['position']}
 
 📋 快速開始：
-點擊下方按鈕開始查詢標案
-
-輸入 'help' 查看完整使用指南"""
+點擊下方按鈕開始查詢標案"""
                     
                     line_bot_api.reply_message(
                         event.reply_token,
@@ -835,14 +849,15 @@ def create_app():
                         QuickReplyButton(action=MessageAction(label="❓ 使用說明", text="help"))
                     ])
                     
-                    response_text = """👋 歡迎使用政府採購機器人！
+                    response_text = """👋 歡迎使用 Eazy Procurement Bot！
 
 為了提供更好的服務，請先登錄您的公司資料：
 
 ✍️ 點擊「開始登錄」填寫資料
-• 公司名稱
-• 聯絡人姓名
+• 公司
+• 聯絡人
 • Email
+• 職務/職位
 
 📌 登錄後即可開始查詢政府採購標案！"""
                     
@@ -863,7 +878,7 @@ def create_app():
 
     @app.route("/")
     def health_check():
-        return "政府採購機器人正常運行中！"
+        return "Eazy Procurement Bot 正常運行中！"
 
     @app.route("/test")
     def test_procurement():
