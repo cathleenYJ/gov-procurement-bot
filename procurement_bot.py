@@ -57,9 +57,9 @@ def parse_more_category(message: str) -> str | None:
         return '勞務類'
     return None
 
-def save_user(supabase_client, user_id, company, contact_name, email, position):
+def save_user(supabase_client, user_id, company, contact_name, email, position, industry):
     """儲存或更新使用者資料"""
-    return supabase_client.save_user(user_id, company, contact_name, email, position)
+    return supabase_client.save_user(user_id, company, contact_name, email, position, industry)
 
 def get_user(supabase_client, user_id):
     """取得使用者資料"""
