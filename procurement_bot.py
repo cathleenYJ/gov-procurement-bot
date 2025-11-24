@@ -210,32 +210,7 @@ def create_app():
         data = event.postback.data
         
         try:
-            if data == "modify_company":
-                user_states[user_id] = {"state": "modify_company", "data": {}}
-                response_text = "請輸入新的公司名稱："
-            elif data == "modify_contact":
-                user_states[user_id] = {"state": "modify_contact", "data": {}}
-                response_text = "請輸入新的聯絡人姓名："
-            elif data == "modify_email":
-                user_states[user_id] = {"state": "modify_email", "data": {}}
-                response_text = "請輸入新的 Email："
-            elif data == "modify_position":
-                user_states[user_id] = {"state": "modify_position", "data": {}}
-                response_text = "請輸入新的職務/職位："
-            elif data == "modify_industry":
-                user_states[user_id] = {"state": "modify_industry", "data": {}}
-                quick_reply = QuickReply(items=[
-                    QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
-                    QuickReplyButton(action=MessageAction(label="財物類", text="財物類")),
-                    QuickReplyButton(action=MessageAction(label="勞務類", text="勞務類"))
-                ])
-                line_bot_api.reply_message(
-                    event.reply_token,
-                    TextSendMessage(text="請選擇新的產業類別：", quick_reply=quick_reply)
-                )
-                return
-            else:
-                response_text = "無效的操作。"
+            response_text = "無效的操作。"
             
             line_bot_api.reply_message(
                 event.reply_token,
@@ -418,20 +393,17 @@ def create_app():
             elif user_message_lower in ["修改資料", "更新資料"]:
                 user_data = get_user(supabase_client, user_id)
                 if user_data:
-                    buttons_template = ButtonsTemplate(
-                        title="修改個人資料",
-                        text="請選擇要修改的項目：",
-                        actions=[
-                            PostbackAction(label="公司名稱", data="modify_company"),
-                            PostbackAction(label="聯絡人", data="modify_contact"),
-                            PostbackAction(label="Email", data="modify_email"),
-                            PostbackAction(label="職務/職位", data="modify_position"),
-                            PostbackAction(label="產業類別", data="modify_industry")
-                        ]
-                    )
+                    quick_reply = QuickReply(items=[
+                        QuickReplyButton(action=MessageAction(label="公司名稱", text="修改公司名稱")),
+                        QuickReplyButton(action=MessageAction(label="聯絡人", text="修改聯絡人")),
+                        QuickReplyButton(action=MessageAction(label="Email", text="修改Email")),
+                        QuickReplyButton(action=MessageAction(label="職務/職位", text="修改職務")),
+                        QuickReplyButton(action=MessageAction(label="產業類別", text="修改產業類別"))
+                    ])
+                    response_text = "請選擇要修改的項目："
                     line_bot_api.reply_message(
                         event.reply_token,
-                        TemplateSendMessage(alt_text="請選擇要修改的項目", template=buttons_template)
+                        TextSendMessage(text=response_text, quick_reply=quick_reply)
                     )
                 else:
                     response_text = "您尚未登錄資料，請輸入「開始登錄」進行登錄。"
@@ -439,6 +411,35 @@ def create_app():
                         event.reply_token,
                         TextSendMessage(text=response_text)
                     )
+                return
+                
+            elif user_message == "修改公司名稱":
+                user_states[user_id] = {"state": "modify_company", "data": {}}
+                response_text = "請輸入新的公司名稱："
+                
+            elif user_message == "修改聯絡人":
+                user_states[user_id] = {"state": "modify_contact", "data": {}}
+                response_text = "請輸入新的聯絡人姓名："
+                
+            elif user_message == "修改Email":
+                user_states[user_id] = {"state": "modify_email", "data": {}}
+                response_text = "請輸入新的 Email："
+                
+            elif user_message == "修改職務":
+                user_states[user_id] = {"state": "modify_position", "data": {}}
+                response_text = "請輸入新的職務/職位："
+                
+            elif user_message == "修改產業類別":
+                user_states[user_id] = {"state": "modify_industry", "data": {}}
+                quick_reply = QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="工程類", text="工程類")),
+                    QuickReplyButton(action=MessageAction(label="財物類", text="財物類")),
+                    QuickReplyButton(action=MessageAction(label="勞務類", text="勞務類"))
+                ])
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="請選擇新的產業類別：", quick_reply=quick_reply)
+                )
                 return
                 
             elif user_message_lower in ["我的資料", "查看資料", "建立公司檔案"] or user_message == "建立公司檔案":
